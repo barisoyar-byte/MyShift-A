@@ -1,12 +1,12 @@
 //
-//  Planlama.swift
+//  Arşiv.swift
 //  MyShift A
 //
 //  Created by Barış Oyar on 23.02.2026.
 //
 
 import SwiftUI
-struct PlanlamaGestureView: View {
+struct ArşivGestureView: View {
     var body: some View {
         Text("Tapped!")
             .font(.title)
@@ -14,7 +14,7 @@ struct PlanlamaGestureView: View {
             .padding()
     }
 }
-struct PlanlamaView: View {
+struct ArşivView: View {
     @AppStorage("Menu") private var menu = false
     @State private var navigateToMenu = false
 
@@ -24,7 +24,7 @@ struct PlanlamaView: View {
                 .font(.largeTitle.bold())
                 .padding()
         }
-        .navigationTitle("Planlama")
+        .navigationTitle("Arşiv")
         .navigationBarTitleDisplayMode(.inline)
     }
 }

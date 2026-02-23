@@ -187,10 +187,11 @@
 				};
 			};
 			buildConfigurationList = 6BCB675E2F4A09B30084245F /* Build configuration list for PBXProject "MyShift A" */;
-			developmentRegion = en;
+			developmentRegion = tr;
 			hasScannedForEncodings = 0;
 			knownRegions = (
 				en,
+				tr,
 				Base,
 			);
 			mainGroup = 6BCB675A2F4A09B30084245F;
