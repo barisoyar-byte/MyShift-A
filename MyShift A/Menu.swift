@@ -63,17 +63,6 @@ struct MenuView: View {
                     .multilineTextAlignment(.center)
             }
             
-            NavigationLink(destination: PlanlamaView()) {
-                Text("Planlama")
-                    .foregroundStyle(.white)
-                    .padding(6)
-                    .background(
-                        RoundedRectangle(cornerRadius: 25)
-                            .fill(Color.blue)
-                    )
-                    .font(.largeTitle.bold())
-                    .multilineTextAlignment(.center)
-            }
             
             NavigationLink(destination: GeçiciGörevlerView()){
                     Text("Geçici Görevler")
@@ -100,7 +89,7 @@ struct MenuView: View {
             }
             
             NavigationLink(destination: PlanlamaView()) {
-                Text("Planlama")
+                Text("Duyurular")
                     .foregroundStyle(.white)
                     .padding(6)
                     .background(

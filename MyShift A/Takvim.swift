@@ -62,7 +62,7 @@ struct TakvimGestureView: View {
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 8) {
                     ForEach(daysInMonth(of: selectedDate), id: \.self) { day in
-                        let isSelected = calendar.isDate(day, inSameDayAs: selectedDate)
+                        // Removed unused isSelected declaration
                         let isRed = isRedDay(day)
                         let isBlue = isBlueDay(day)
                         let isToday = calendar.isDateInToday(day)
@@ -163,7 +163,7 @@ struct TakvimGestureView: View {
     }
     
     private func isRedDay(_ date: Date) -> Bool {
-        var comps = DateComponents(year: 2026, month: 1, day: 5)
+        let comps = DateComponents(year: 2026, month: 1, day: 5)
         guard let start = calendar.date(from: comps) else { return false }
         // Only on/after start
         guard date >= start else { return false }
@@ -174,7 +174,7 @@ struct TakvimGestureView: View {
     }
 
     private func isBlueDay(_ date: Date) -> Bool {
-        var comps = DateComponents(year: 2026, month: 1, day: 1)
+        let comps = DateComponents(year: 2026, month: 1, day: 1)
         guard let start = calendar.date(from: comps) else { return false }
         // Only on/after start
         guard date >= start else { return false }
@@ -200,7 +200,7 @@ private struct ForceLandscapeController: UIViewControllerRepresentable {
             // Attempt to set device orientation to landscape
             let value = UIInterfaceOrientation.landscapeRight.rawValue
             UIDevice.current.setValue(value, forKey: "orientation")
-            UIViewController.attemptRotationToDeviceOrientation()
+            self.setNeedsUpdateOfSupportedInterfaceOrientations()
         }
 
         override var supportedInterfaceOrientations: UIInterfaceOrientationMask { [.landscapeLeft, .landscapeRight] }
