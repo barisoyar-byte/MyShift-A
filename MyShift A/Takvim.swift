@@ -217,7 +217,7 @@ private struct ForceLandscapeModifier: ViewModifier {
 }
 
 private extension View {
-    func forceLandscapeIfPossible() -> some View { self.modifier(ForceLandscapeModifier()) }
+    func msa_forceLandscapeIfPossible() -> some View { self.modifier(ForceLandscapeModifier()) }
 }
 #endif
 
@@ -242,7 +242,7 @@ struct TakvimView: View {
     var body: some View {
         #if canImport(UIKit)
         TakvimGestureView()
-            .forceLandscapeIfPossible()
+            .msa_forceLandscapeIfPossible()
         #else
         TakvimGestureView()
         #endif
