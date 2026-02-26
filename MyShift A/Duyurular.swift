@@ -1,7 +1,19 @@
-//
-//  Duyurular.swift
-//  MyShift A
-//
-//  Created by Barış Oyar on 23.02.2026.
-//
+import SwiftUI
 
+struct DuyurularView: View {
+    var body: some View {
+        VStack(spacing: 12) {
+            Spacer()
+            Text("Yakında")
+                .font(.largeTitle.bold())
+                .foregroundStyle(.secondary)
+            Spacer()
+        }
+        .padding()
+        .navigationBarTitleDisplayMode(.inline)
+    }
+}
+
+#Preview {
+    NavigationStack { DuyurularView() }
+}
