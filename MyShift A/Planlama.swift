@@ -61,16 +61,7 @@ fileprivate func loadInitialsCSV() -> String {
     return ""
 }
 
-// A simple entry model to represent initials for various roles
-struct PlanlamaEntry: Identifiable, Equatable {
-    let id = UUID()
-    var mloExe: String
-    var mloPln: String
-    var ojtil: String
-    var muwExe: String
-    var muwPln: String
-    var ojtiu: String
-}
+// Removed duplicate PlanlamaEntry struct here
 
 struct PlanlamaView: View {
     // Example data to make the view compile and previewable
@@ -80,7 +71,7 @@ struct PlanlamaView: View {
     @AppStorage(ekipInitialsUserKey) private var storedInitialsUser: String = ""
     
     @State private var teams: [String] = ["A", "B", "C", "D", "E"]
-    @State private var selectedTeamIndex: Int = 0
+    @AppStorage("selectedTeamIndex") private var selectedTeamIndex: Int = 0
     @State private var selectedDate: Date = Date()
     @State private var selectedDay: Date? = nil
     private let calendar = Calendar.current
@@ -134,6 +125,50 @@ struct PlanlamaView: View {
             get: { selections[row][col] },
             set: { selections[row][col] = $0 }
         )
+    }
+    
+    private func isDuplicateInitial(at row: Int, col: Int) -> Bool {
+        // Exclude the last row entirely
+        if row == 8 { return false }
+        // Only apply to valid data columns
+        guard (1...6).contains(col) else { return false }
+        let current = selections[row][col]
+        if current.isEmpty { return false }
+
+        // Helper to decide if two positions should be compared, taking NOTAM/ARI exception into account
+        func shouldCompare(_ r1: Int, _ c1: Int, _ r2: Int, _ c2: Int) -> Bool {
+            // Same cell, skip
+            if r1 == r2 && c1 == c2 { return false }
+            // Allow NOTAM and ARI to be the same: row 7 has NOTAM group across columns (2..4) and ARI at column 6
+            if r1 == 7 && r2 == 7 {
+                let isNotam1 = (2...4).contains(c1)
+                let isAri1 = (c1 == 6)
+                let isNotam2 = (2...4).contains(c2)
+                let isAri2 = (c2 == 6)
+                if (isNotam1 && isAri2) || (isAri1 && isNotam2) {
+                    return false
+                }
+            }
+            return true
+        }
+
+        // Check duplicates in the same row
+        for c in 1...6 {
+            if shouldCompare(row, col, row, c) && selections[row][c] == current {
+                return true
+            }
+        }
+
+        // Check previous and next rows if they exist and are not the excluded last row
+        let neighbors = [row - 1, row + 1].filter { (2...7).contains($0) }
+        for r in neighbors {
+            for c in 1...6 {
+                if shouldCompare(row, col, r, c) && selections[r][c] == current {
+                    return true
+                }
+            }
+        }
+        return false
     }
     
     private func moveTeam(by offset: Int) {
@@ -236,10 +271,12 @@ struct PlanlamaView: View {
         let initials: [String]
         let labelFor: (Int, Int) -> String
         let bindingForSelection: (Int, Int) -> Binding<String>
+        let isDuplicateInitial: (Int, Int) -> Bool
         
         private struct PickerCell: View {
             let binding: Binding<String>
             let options: [String]
+            let tintColor: Color?
             var body: some View {
                 Picker("", selection: binding) {
                     ForEach(options, id: \.self) { item in
@@ -248,6 +285,7 @@ struct PlanlamaView: View {
                 }
                 .labelsHidden()
                 .pickerStyle(.menu)
+                .tint(tintColor ?? .accentColor)
             }
         }
         
@@ -335,7 +373,7 @@ struct PlanlamaView: View {
                                     ZStack {
                                         RoundedRectangle(cornerRadius: 6)
                                             .stroke(Color.secondary.opacity(0.5), lineWidth: 1)
-                                        PickerCell(binding: bindingForSelection(row, 2), options: initials)
+                                        PickerCell(binding: bindingForSelection(row, 2), options: initials, tintColor: isDuplicateInitial(row, 2) ? .red : nil)
                                     }
                                     .frame(minWidth: 80, minHeight: row == 8 ? 72 : 36)
                                     .gridCellColumns(3)
@@ -354,7 +392,7 @@ struct PlanlamaView: View {
                                     ZStack {
                                         RoundedRectangle(cornerRadius: 6)
                                             .stroke(Color.secondary.opacity(0.5), lineWidth: 1)
-                                        PickerCell(binding: bindingForSelection(row, 6), options: initials)
+                                        PickerCell(binding: bindingForSelection(row, 6), options: initials, tintColor: isDuplicateInitial(row, 6) ? .red : nil)
                                     }
                                     .frame(minWidth: 80, minHeight: row == 8 ? 72 : 36)
                                     .gridCellColumns(2)
@@ -386,7 +424,7 @@ struct PlanlamaView: View {
                                             RoundedRectangle(cornerRadius: 6)
                                                 .stroke(Color.secondary.opacity(0.5), lineWidth: 1)
                                             if row >= 1 && col >= 1 {
-                                                PickerCell(binding: bindingForSelection(row, col), options: initials)
+                                                PickerCell(binding: bindingForSelection(row, col), options: initials, tintColor: isDuplicateInitial(row, col) ? .red : nil)
                                             } else {
                                                 let labelText = labelFor(row, col)
                                                 Text(labelText)
@@ -500,56 +538,19 @@ struct PlanlamaView: View {
                 selections: $selections,
                 initials: initials,
                 labelFor: { row, col in labelFor(row: row, col: col) },
-                bindingForSelection: { row, col in bindingForSelection(row: row, col: col) }
+                bindingForSelection: { row, col in bindingForSelection(row: row, col: col) },
+                isDuplicateInitial: { row, col in isDuplicateInitial(at: row, col: col) }
             )
         }
         .padding()
     }
 }
 
-
 #if canImport(UIKit)
-import UIKit
-
-private struct ForceLandscapeController: UIViewControllerRepresentable {
-    func makeUIViewController(context: Context) -> UIViewController { Controller() }
-    func updateUIViewController(_ uiViewController: UIViewController, context: Context) {}
-
-    private final class Controller: UIViewController {
-        override func viewDidAppear(_ animated: Bool) {
-            super.viewDidAppear(animated)
-            let value = UIInterfaceOrientation.landscapeRight.rawValue
-            UIDevice.current.setValue(value, forKey: "orientation")
-            self.setNeedsUpdateOfSupportedInterfaceOrientations()
-        }
-        override var supportedInterfaceOrientations: UIInterfaceOrientationMask { [.landscapeLeft, .landscapeRight] }
-        override var preferredInterfaceOrientationForPresentation: UIInterfaceOrientation { .landscapeRight }
-        override var shouldAutorotate: Bool { true }
-    }
-}
-
-private struct ForceLandscapeModifier: ViewModifier {
-    func body(content: Content) -> some View {
-        content.background(ForceLandscapeController().ignoresSafeArea())
-    }
-}
-
-extension View {
-    func forceLandscapeIfPossible() -> some View { self.modifier(ForceLandscapeModifier()) }
-}
+// Removed duplicate ForceLandscapeController, ForceLandscapeModifier, and forceLandscapeIfPossible() here
 #endif
 
-// Provide a TakvimView wrapper to satisfy references from Menu.swift
-struct TakvimWrapperView: View {
-    var body: some View {
-        #if canImport(UIKit)
-        TakvimGestureView()
-            .forceLandscapeIfPossible()
-        #else
-        TakvimGestureView()
-        #endif
-    }
-}
+// Removed duplicate TakvimWrapperView here
 
 #Preview("Planlama") {
     NavigationStack { PlanlamaView() }

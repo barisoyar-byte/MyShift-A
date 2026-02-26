@@ -11,8 +11,8 @@ struct TakvimGestureView: View {
     private let calendar = Calendar.current
     @State private var selectedDate: Date = Date()
     
-    private let teams: [String] = ["A Ekibi", "B Ekibi", "C Ekibi", "D Ekibi", "E Ekibi"]
-    @State private var selectedTeamIndex: Int = 0
+    private let teams: [String] = ["A", "B", "C", "D", "E"]
+    @AppStorage("selectedTeamIndex") private var selectedTeamIndex: Int = 0
 
     private var dateRange: ClosedRange<Date> {
         let startComps = DateComponents(year: 2026, month: 1, day: 1)
@@ -154,11 +154,11 @@ struct TakvimGestureView: View {
     
     private func teamDayOffset() -> Int {
         switch teams[selectedTeamIndex] {
-        case "B Ekibi": return 1
-        case "C Ekibi": return 2
-        case "D Ekibi": return 3
-        case "E Ekibi": return 4
-        default: return 0 // A Ekibi
+        case "B": return 1
+        case "C": return 2
+        case "D": return 3
+        case "E": return 4
+        default: return 0 // A
         }
     }
     

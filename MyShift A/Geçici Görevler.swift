@@ -24,7 +24,6 @@ struct GeçiciGörevlerView: View {
                 .font(.largeTitle.bold())
                 .padding()
         }
-        .navigationTitle("Geçici Görevler")
         .navigationBarTitleDisplayMode(.inline)
     }
 }

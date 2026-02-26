@@ -10,7 +10,6 @@ struct KoşullarView: View {
             Spacer()
         }
         .padding()
-        .navigationTitle("Koşullar")
         .navigationBarTitleDisplayMode(.inline)
     }
 }

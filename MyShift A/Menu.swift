@@ -39,7 +39,7 @@ struct MenuView: View {
                     .multilineTextAlignment(.center)
             }
             
-            NavigationLink(destination: ArşivView()) {
+            NavigationLink(destination: ArşivGestureView()) {
                 Text("Arşiv")
                     .foregroundStyle(.white)
                     .padding(6)
@@ -62,7 +62,17 @@ struct MenuView: View {
                     .font(.largeTitle.bold())
                     .multilineTextAlignment(.center)
             }
-            
+            NavigationLink(destination: İstatistiklerView()) {
+                Text("İstatistikler")
+                    .foregroundStyle(.white)
+                    .padding(6)
+                    .background(
+                        RoundedRectangle(cornerRadius: 25)
+                            .fill(Color.blue)
+                    )
+                    .font(.largeTitle.bold())
+                    .multilineTextAlignment(.center)
+            }
             
             NavigationLink(destination: GeçiciGörevlerView()){
                     Text("Geçici Görevler")
@@ -76,7 +86,7 @@ struct MenuView: View {
                     .multilineTextAlignment(.center)
             }
             
-            NavigationLink(destination: PlanlamaView()) {
+            NavigationLink(destination: KoşullarView()) {
                 Text("Koşullar")
                     .foregroundStyle(.white)
                     .padding(6)
@@ -88,7 +98,7 @@ struct MenuView: View {
                     .multilineTextAlignment(.center)
             }
             
-            NavigationLink(destination: PlanlamaView()) {
+            NavigationLink(destination: DuyurularView()) {
                 Text("Duyurular")
                     .foregroundStyle(.white)
                     .padding(6)
@@ -102,7 +112,6 @@ struct MenuView: View {
             
         }
         .padding()
-        .navigationTitle("Menü")
         .navigationBarTitleDisplayMode(.inline)
     }
 }
@@ -112,3 +121,4 @@ struct MenuView: View {
         MenuView()
     }
 }
+

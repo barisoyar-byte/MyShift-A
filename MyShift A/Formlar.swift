@@ -24,7 +24,7 @@ struct FormlarView: View {
                 .font(.largeTitle.bold())
                 .padding()
         }
-        .navigationTitle("Formlar")
+
         .navigationBarTitleDisplayMode(.inline)
     }
 }
