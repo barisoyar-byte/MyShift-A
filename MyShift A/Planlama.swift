@@ -77,6 +77,7 @@ struct PlanlamaView: View {
     private let calendar = Calendar.current
     
     @State private var selections: [[String]] = Array(repeating: Array(repeating: "", count: 7), count: 10)
+    @State private var monthMatrix: [[String]] = []
     
     private var initials: [String] {
         let csv: String
@@ -103,8 +104,9 @@ struct PlanlamaView: View {
             case 4: return "12:30"
             case 5: return "14:30"
             case 6: return "16:30"
-            case 7: return "NOTAM"
-            case 8: return "İzin/Mazeret/\nRapor/Görev"
+            case 7: return "18:30"
+            case 8: return "NOTAM"
+            case 9: return "İzin/Mazeret/\nRapor/Görev"
             default: return ""
             }
         } else {
@@ -188,6 +190,12 @@ struct PlanlamaView: View {
                 return
             }
             selectedDate = newDate
+            
+            if let first = firstSelectableDay(in: newDate) {
+                selectedDay = first
+            } else {
+                selectedDay = nil
+            }
         }
     }
     
@@ -222,6 +230,34 @@ struct PlanlamaView: View {
 
     private func dayNumber(for date: Date) -> String {
         String(calendar.component(.day, from: date))
+    }
+    
+    private func firstSelectableDay(in month: Date) -> Date? {
+        for day in daysInMonth(of: month) {
+            if isRedDay(day) || isBlueDay(day) {
+                return day
+            }
+        }
+        return nil
+    }
+
+    private func nearestSelectableDay(in month: Date, from reference: Date) -> Date? {
+        let days = daysInMonth(of: month)
+        guard !days.isEmpty else { return nil }
+        let ref = calendar.startOfDay(for: reference)
+        var bestDay: Date? = nil
+        var bestDistance: Int = Int.max
+        for day in days {
+            if isRedDay(day) || isBlueDay(day) {
+                if let dist = calendar.dateComponents([.day], from: ref, to: day).day.map({ abs($0) }) {
+                    if dist < bestDistance {
+                        bestDistance = dist
+                        bestDay = day
+                    }
+                }
+            }
+        }
+        return bestDay
     }
 
     private func isBlueDay(_ date: Date) -> Bool {
@@ -266,6 +302,51 @@ struct PlanlamaView: View {
         return days % 5 == 0
     }
     
+    private func ensureMonthMatrixRows(initials: [String], dayCount: Int) {
+        let nonEmptyInitials = initials.filter { !$0.isEmpty }
+        let targetRows = nonEmptyInitials.count + 1
+        let targetCols = dayCount
+        guard targetCols > 0 else {
+            monthMatrix = Array(repeating: Array(repeating: "", count: 0), count: targetRows)
+            return
+        }
+        if monthMatrix.count != targetRows {
+            monthMatrix = Array(repeating: Array(repeating: "", count: targetCols), count: targetRows)
+        } else {
+            for r in 0..<monthMatrix.count {
+                if monthMatrix[r].count != targetCols {
+                    if monthMatrix[r].count < targetCols {
+                        monthMatrix[r].append(contentsOf: Array(repeating: "", count: targetCols - monthMatrix[r].count))
+                    } else {
+                        monthMatrix[r] = Array(monthMatrix[r].prefix(targetCols))
+                    }
+                }
+            }
+        }
+    }
+
+    private func matrixStorageKey(for date: Date) -> String {
+        let comps = calendar.dateComponents([.year, .month], from: date)
+        let y = comps.year ?? 0
+        let m = comps.month ?? 0
+        return "matrix_\(y)\(String(format: "%02d", m))"
+    }
+
+    private func saveMonthMatrix(for date: Date) {
+        let key = matrixStorageKey(for: date)
+        if let data = try? JSONEncoder().encode(monthMatrix) {
+            UserDefaults.standard.set(data, forKey: key)
+        }
+    }
+
+    private func loadMonthMatrix(for date: Date) {
+        let key = matrixStorageKey(for: date)
+        if let data = UserDefaults.standard.data(forKey: key),
+           let decoded = try? JSONDecoder().decode([[String]].self, from: data) {
+            monthMatrix = decoded
+        }
+    }
+    
     struct DayShiftGrid: View {
         @Binding var selections: [[String]]
         let initials: [String]
@@ -278,14 +359,25 @@ struct PlanlamaView: View {
             let options: [String]
             let tintColor: Color?
             var body: some View {
-                Picker("", selection: binding) {
-                    ForEach(options, id: \.self) { item in
-                        Text(item).tag(item)
+                HStack(spacing: 6) {
+                    Picker("", selection: binding) {
+                        ForEach(options, id: \.self) { item in
+                            HStack {
+                                Text(item)
+                                Spacer()
+                                if item == binding.wrappedValue && !item.isEmpty {
+                                    // no checkmark; keep clean
+                                }
+                            }
+                            .tag(item)
+                        }
                     }
+                    .labelsHidden()
+                    .pickerStyle(.menu)
+                    .tint(tintColor ?? .accentColor)
+
+                    Spacer(minLength: 0)
                 }
-                .labelsHidden()
-                .pickerStyle(.menu)
-                .tint(tintColor ?? .accentColor)
             }
         }
         
@@ -541,6 +633,24 @@ struct PlanlamaView: View {
                 bindingForSelection: { row, col in bindingForSelection(row: row, col: col) },
                 isDuplicateInitial: { row, col in isDuplicateInitial(at: row, col: col) }
             )
+            
+        }
+        .onAppear {
+            let dayCount = daysInMonth(of: selectedDate).count
+            ensureMonthMatrixRows(initials: initials, dayCount: dayCount)
+            loadMonthMatrix(for: selectedDate)
+            let today = calendar.startOfDay(for: Date())
+            if let nearest = nearestSelectableDay(in: selectedDate, from: today) {
+                selectedDay = nearest
+            }
+        }
+        .onChange(of: selectedDate) { _, _ in
+            let dayCount = daysInMonth(of: selectedDate).count
+            ensureMonthMatrixRows(initials: initials, dayCount: dayCount)
+            loadMonthMatrix(for: selectedDate)
+        }
+        .onChange(of: monthMatrix) { _, _ in
+            saveMonthMatrix(for: selectedDate)
         }
         .padding()
     }

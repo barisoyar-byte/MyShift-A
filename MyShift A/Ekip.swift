@@ -60,6 +60,7 @@ struct EkipView: View {
                                 if index < entries.count {
                                     entries.remove(at: index)
                                     saveEntriesToFile()
+                                    updateUserInitialsCSVFromEntries()
                                 }
                             } label: {
                                 Label("Sil", systemImage: "trash")
@@ -76,10 +77,12 @@ struct EkipView: View {
                             }
                         }
                         saveEntriesToFile()
+                        updateUserInitialsCSVFromEntries()
                     }
                     .onMove { indices, newOffset in
                         entries.move(fromOffsets: indices, toOffset: newOffset)
                         saveEntriesToFile()
+                        updateUserInitialsCSVFromEntries()
                     }
                 }
                 .listStyle(.insetGrouped)
@@ -107,6 +110,8 @@ struct EkipView: View {
         .sheet(isPresented: $showingEntrySheet) {
             EkipEntryView() { name, initial in
                 entries.append((name: name, initial: initial))
+                saveEntriesToFile()
+                updateUserInitialsCSVFromEntries()
             }
         }
         .task { loadEntriesFromFile() }
@@ -133,6 +138,14 @@ struct EkipView: View {
         entries = loaded
     }
     
+    private func updateUserInitialsCSVFromEntries() {
+        let csv = entries
+            .map { $0.initial.trimmingCharacters(in: .whitespacesAndNewlines).uppercased() }
+            .filter { !$0.isEmpty }
+            .joined(separator: ",")
+        UserDefaults.standard.set(csv, forKey: "userInitials")
+    }
+    
     private func saveEntriesToFile() {
         let fm = FileManager.default
         let urls = fm.urls(for: .documentDirectory, in: .userDomainMask)
@@ -142,6 +155,7 @@ struct EkipView: View {
         let content = entries.map { "\($0.name)\t\($0.initial)" }.joined(separator: "\n") + "\n"
         do {
             try content.data(using: .utf8)?.write(to: fileURL, options: .atomic)
+            updateUserInitialsCSVFromEntries()
         } catch {
             print("Dosyaya yazma hatası (save): \(error)")
         }

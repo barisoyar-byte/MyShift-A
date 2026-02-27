@@ -185,8 +185,9 @@ struct ArşivGestureView: View {
             case 4: return "12:30"
             case 5: return "14:30"
             case 6: return "16:30"
-            case 7: return "NOTAM"
-            case 8: return "İzin/Mazeret/\nRapor/Görev"
+            case 7: return "18:30"
+            case 8: return "NOTAM"
+            case 9: return "İzin/Mazeret/\nRapor/Görev"
             default: return ""
             }
         } else {
@@ -419,14 +420,25 @@ struct ArşivGestureView: View {
             let options: [String]
             let tintColor: Color?
             var body: some View {
-                Picker("", selection: binding) {
-                    ForEach(options, id: \.self) { item in
-                        Text(item).tag(item)
+                HStack(spacing: 6) {
+                    Picker("", selection: binding) {
+                        ForEach(options, id: \.self) { item in
+                            HStack {
+                                Text(item)
+                                Spacer()
+                                if item == binding.wrappedValue && !item.isEmpty {
+                                    // no checkmark; keep clean
+                                }
+                            }
+                            .tag(item)
+                        }
                     }
+                    .labelsHidden()
+                    .pickerStyle(.menu)
+                    .tint(tintColor ?? .accentColor)
+
+                    Spacer(minLength: 0)
                 }
-                .labelsHidden()
-                .pickerStyle(.menu)
-                .tint(tintColor ?? .accentColor)
             }
         }
         

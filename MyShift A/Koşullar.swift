@@ -13,7 +13,6 @@ struct KoşullarView: View {
         .navigationBarTitleDisplayMode(.inline)
     }
 }
-
 #Preview {
     NavigationStack { KoşullarView() }
 }

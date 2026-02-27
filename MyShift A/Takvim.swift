@@ -14,6 +14,15 @@ struct TakvimGestureView: View {
     private let teams: [String] = ["A", "B", "C", "D", "E"]
     @AppStorage("selectedTeamIndex") private var selectedTeamIndex: Int = 0
 
+    // Load initials written by EkipView via UserDefaults as CSV
+    @AppStorage("userInitials") private var userInitialsCSV: String = ""
+    private var initials: [String] {
+        userInitialsCSV
+            .split(separator: ",")
+            .map { String($0).trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+    }
+
     private var dateRange: ClosedRange<Date> {
         let startComps = DateComponents(year: 2026, month: 1, day: 1)
         let start = calendar.date(from: startComps) ?? Date()
@@ -25,78 +34,111 @@ struct TakvimGestureView: View {
     }
 
     var body: some View {
-        VStack(spacing: 12) {
-            // Header with title and navigation buttons
-            HStack {
-                Button(action: { moveTeam(by: -1) }) {
-                    Image(systemName: "chevron.left")
-                        .font(.title3.weight(.semibold))
-                }
-                Spacer()
-                Text(teams[selectedTeamIndex])
-                    .font(.title.weight(.bold))
-                    .foregroundStyle(Color.blue)
-                Spacer()
-                Button(action: { moveTeam(by: 1) }) {
-                    Image(systemName: "chevron.right")
-                        .font(.title3.weight(.semibold))
-                }
-            }
-            .padding(.horizontal)
-
-            // Month navigation and single-row days strip
-            HStack {
-                Button(action: { changeMonth(by: -1) }) {
-                    Image(systemName: "chevron.left.circle.fill").font(.title3)
-                }
-                Spacer()
-                Text(monthYearString(for: selectedDate))
+        HStack(alignment: .top, spacing: 12) {
+            // Left fixed column label with initials vertically listed under "Ad"
+            VStack(alignment: .leading, spacing: 8) {
+                Text("Ad")
                     .font(.headline)
-                Spacer()
-                Button(action: { changeMonth(by: 1) }) {
-                    Image(systemName: "chevron.right.circle.fill").font(.title3)
-                }
-            }
-            .padding(.horizontal)
-
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 8) {
-                    ForEach(daysInMonth(of: selectedDate), id: \.self) { day in
-                        // Removed unused isSelected declaration
-                        let isRed = isRedDay(day)
-                        let isBlue = isBlueDay(day)
-                        let isToday = calendar.isDateInToday(day)
-
-                        // Priority: Selected > Today ring > Red/Blue coloring
-                        let textColor: Color = isRed ? .red : (isBlue ? .blue : .primary)
-                        let borderColor: Color = isToday ? .blue : (isRed ? .red : (isBlue ? .blue : Color.gray.opacity(0.3)))
-                        let borderWidth: CGFloat = isToday ? 2 : 1
-
-                        VStack(spacing: 4) {
-                            Text(weekdayShort(for: day))
-                                .font(.caption2)
-                                .foregroundStyle(.secondary)
-                            Text(dayNumber(for: day))
-                                .font(.headline.weight(.semibold))
+                    .padding(.top, 4)
+                // Initials listed vertically under Ad
+                ScrollView(.vertical, showsIndicators: true) {
+                    VStack(alignment: .leading, spacing: 6) {
+                        ForEach(initials, id: \.self) { ini in
+                            Text(ini)
+                                .font(.caption)
+                                .frame(height: 24, alignment: .leading)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .padding(.horizontal, 6)
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 6)
+                                        .stroke(Color.secondary.opacity(0.3), lineWidth: 1)
+                                )
                         }
-                        .padding(.vertical, 8)
-                        .padding(.horizontal, 10)
-                        .background(
-                            RoundedRectangle(cornerRadius: 10)
-                                .fill(isToday ? Color.yellow.opacity(0.25) : Color.clear)
-                        )
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 10)
-                                .stroke(borderColor, lineWidth: borderWidth)
-                        )
-                        .foregroundStyle(textColor)
-                        .allowsHitTesting(false)
                     }
                 }
-                .padding(.horizontal)
+            }
+            .frame(width: 60)
+            .padding(.leading)
+
+            // Main calendar content
+            VStack(spacing: 12) {
+                VStack(alignment: .leading, spacing: 12) {
+                    // 
+                }
+
+                VStack(spacing: 12) {
+                    // Header with title and navigation buttons
+                    HStack {
+                        Button(action: { moveTeam(by: -1) }) {
+                            Image(systemName: "chevron.left")
+                                .font(.title3.weight(.semibold))
+                        }
+                        Spacer()
+                        Text(teams[selectedTeamIndex])
+                            .font(.title.weight(.bold))
+                            .foregroundStyle(Color.blue)
+                        Spacer()
+                        Button(action: { moveTeam(by: 1) }) {
+                            Image(systemName: "chevron.right")
+                                .font(.title3.weight(.semibold))
+                        }
+                    }
+                    .padding(.horizontal)
+
+                    // Month navigation and single-row days strip
+                    HStack {
+                        Button(action: { changeMonth(by: -1) }) {
+                            Image(systemName: "chevron.left.circle.fill").font(.title3)
+                        }
+                        Spacer()
+                        Text(monthYearString(for: selectedDate))
+                            .font(.headline)
+                        Spacer()
+                        Button(action: { changeMonth(by: 1) }) {
+                            Image(systemName: "chevron.right.circle.fill").font(.title3)
+                            
+                        }
+                    }
+                    .padding(.horizontal)
+                    
+                    ScrollView(.horizontal, showsIndicators: false) {
+                        HStack(spacing: 8) {
+                            ForEach(daysInMonth(of: selectedDate), id: \.self) { day in
+                                let isRed = isRedDay(day)
+                                let isBlue = isBlueDay(day)
+                                let isToday = calendar.isDateInToday(day)
+
+                                let textColor: Color = isRed ? .red : (isBlue ? .blue : .primary)
+                                let borderColor: Color = isToday ? .blue : (isRed ? .red : (isBlue ? .blue : Color.gray.opacity(0.3)))
+                                let borderWidth: CGFloat = isToday ? 2 : 1
+
+                                VStack(spacing: 4) {
+                                    Text(weekdayShort(for: day))
+                                        .font(.caption2)
+                                        .foregroundStyle(.secondary)
+                                    Text(dayNumber(for: day))
+                                        .font(.headline.weight(.semibold))
+                                }
+                                .padding(.vertical, 8)
+                                .padding(.horizontal, 10)
+                                .background(
+                                    RoundedRectangle(cornerRadius: 10)
+                                        .fill(isToday ? Color.yellow.opacity(0.25) : Color.clear)
+                                )
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 10)
+                                        .stroke(borderColor, lineWidth: borderWidth)
+                                )
+                                .foregroundStyle(textColor)
+                                .allowsHitTesting(false)
+                            }
+                        }
+                        .padding(.horizontal)
+                    }
+                }
+                .padding()
             }
         }
-        .padding()
     }
     
     private func moveTeam(by offset: Int) {
@@ -252,3 +294,4 @@ struct TakvimView: View {
 #Preview {
     TakvimView()
 }
+
