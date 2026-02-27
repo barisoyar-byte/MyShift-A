@@ -69,7 +69,25 @@ struct TakvimGestureView: View {
     // Custom selection UI state
     @State private var presentingCellKey: String? = nil
 
+    // Drag selection state for the top blank row
+    @State private var dragSelecting = false
+    @State private var dragStartDayIndex: Int? = nil
+    @State private var dragCurrentDayIndex: Int? = nil
+    @State private var mergedRanges: [ClosedRange<Int>] = []
+    
+    // Merged block text storage and editing state
+    @State private var mergedTexts: [ClosedRange<Int>: String] = [:]
+    @State private var editingRange: ClosedRange<Int>? = nil
+
     private func cellKey(dayIndex: Int, rowIndex: Int) -> String { "\(dayIndex)-\(rowIndex)" }
+    
+    private func isDay(_ dayIndex: Int, in range: ClosedRange<Int>) -> Bool { range.contains(dayIndex) }
+    private func isDayInAnyMergedRange(_ dayIndex: Int) -> Bool { mergedRanges.contains(where: { $0.contains(dayIndex) }) }
+    
+    private func mergedRange(containing dayIndex: Int) -> ClosedRange<Int>? {
+        mergedRanges.first(where: { $0.contains(dayIndex) })
+    }
+    private func isStart(of range: ClosedRange<Int>, at dayIndex: Int) -> Bool { range.lowerBound == dayIndex }
 
     @ViewBuilder
     private func selectionSheet(for key: String) -> some View {
@@ -83,14 +101,15 @@ struct TakvimGestureView: View {
                         }) {
                             HStack {
                                 let abbr = optionAbbreviations[option] ?? ""
-                                if !abbr.isEmpty {
-                                    Text(abbr)
-                                        .font(.body.weight(.semibold))
-                                        .foregroundStyle(optionColors[option] ?? .secondary)
-                                        .frame(width: 24, alignment: .leading)
+                                HStack(spacing: 6) {
+                                    if !abbr.isEmpty {
+                                        Text(abbr)
+                                            .font(.body.weight(.semibold))
+                                            .foregroundStyle(optionColors[option] ?? .secondary)
+                                    }
+                                    Text(option)
+                                        .font(.headline.weight(.medium))
                                 }
-                                Text(option)
-                                    .font(.headline.weight(.medium))
                                 Spacer()
                                 if cellSelections[key] == option {
                                     Image(systemName: "checkmark")
@@ -177,6 +196,10 @@ struct TakvimGestureView: View {
                         }
                         .frame(width: 80, alignment: .leading)
                         .padding(.vertical, 8)
+                        
+                        // Frameless blank row above initials (first column only)
+                        Color.clear
+                            .frame(width: 80, height: 28)
 
                         // Initials rows
                         ForEach(initials, id: \.self) { ini in
@@ -215,6 +238,82 @@ struct TakvimGestureView: View {
                                 .foregroundStyle(.secondary)
                             Text(dayNumber(for: day))
                                 .font(.title3.weight(.semibold))
+                            
+                            // Blank framed row to align with left blank row (supports drag selection and merged block)
+                            let topRowDayIndex = calendar.component(.day, from: day)
+                            let isInDraggingRange: Bool = {
+                                if let s = dragStartDayIndex, let c = dragCurrentDayIndex, dragSelecting {
+                                    let lower = min(s, c)
+                                    let upper = max(s, c)
+                                    return (lower...upper).contains(topRowDayIndex)
+                                }
+                                return false
+                            }()
+                            let activeMerged = mergedRange(containing: topRowDayIndex)
+                            let isMerged = activeMerged != nil
+                            let isMergedStart = isMerged && isStart(of: activeMerged!, at: topRowDayIndex)
+
+                            ZStack {
+                                if let range = activeMerged, isMergedStart {
+                                    // Render a merged block starting at this day, spanning the whole range width via overlay
+                                    let span = range.count // number of days in range
+                                    let cellWidth: CGFloat = 60
+                                    let blockWidth = CGFloat(span) * cellWidth
+                                    RoundedRectangle(cornerRadius: 6)
+                                        .fill(Color.gray.opacity(0.2))
+                                        .overlay(
+                                            RoundedRectangle(cornerRadius: 6)
+                                                .stroke(Color.gray.opacity(0.3), lineWidth: 1)
+                                        )
+                                        .frame(width: blockWidth, height: 28, alignment: .leading)
+                                        .alignmentGuide(.leading) { d in d[.leading] }
+                                        .onTapGesture {
+                                            editingRange = range
+                                        }
+                                        .overlay(
+                                            Text(mergedTexts[range] ?? "")
+                                                .font(.footnote.weight(.semibold))
+                                                .lineLimit(1)
+                                                .minimumScaleFactor(0.6)
+                                                .padding(.horizontal, 4)
+                                                .frame(width: blockWidth - 8, alignment: .center)
+                                        , alignment: .center)
+                                } else {
+                                    // Regular single cell background (drag feedback or idle)
+                                    let bg = isInDraggingRange ? Color.indigo.opacity(0.25) : (isMerged ? Color.clear : Color.clear)
+                                    RoundedRectangle(cornerRadius: 6)
+                                        .fill(bg)
+                                        .overlay(
+                                            RoundedRectangle(cornerRadius: 6)
+                                                .stroke(Color.gray.opacity(0.3), lineWidth: 1)
+                                        )
+                                        .frame(width: 60, height: 28)
+                                }
+                            }
+                            .frame(width: 60, height: 28)
+                            .contentShape(Rectangle())
+                            .gesture(
+                                DragGesture(minimumDistance: 0)
+                                    .onChanged { _ in
+                                        if isMerged { return }
+                                        if dragStartDayIndex == nil {
+                                            dragStartDayIndex = topRowDayIndex
+                                        }
+                                        dragCurrentDayIndex = topRowDayIndex
+                                        dragSelecting = true
+                                    }
+                                    .onEnded { _ in
+                                        if isMerged { return }
+                                        dragSelecting = false
+                                        if let s = dragStartDayIndex, let c = dragCurrentDayIndex {
+                                            let lower = min(s, c)
+                                            let upper = max(s, c)
+                                            mergedRanges.append(lower...upper)
+                                        }
+                                        dragStartDayIndex = nil
+                                        dragCurrentDayIndex = nil
+                                    }
+                            )
 
                             // Interactive rows aligned with left labels (only initials rows + Var/Yok)
                             ForEach(0..<(initials.count + 2), id: \.self) { r in
@@ -256,35 +355,51 @@ struct TakvimGestureView: View {
                                     .buttonStyle(.plain)
                                     .frame(width: 60, height: 28)
                                 } else if r == initials.count {
-                                    // Var count row
+                                    // Var count row with 1-5 red-toned background
+                                    let varTone: Color = {
+                                        switch varCount {
+                                        case 1: return .yellow
+                                        case 2: return .orange
+                                        case 3: return .orange.opacity(0.8)
+                                        case 4: return .red.opacity(0.8)
+                                        case 5: return .red
+                                        default: return .clear
+                                        }
+                                    }()
                                     ZStack {
                                         RoundedRectangle(cornerRadius: 6)
-                                            .stroke(Color.gray.opacity(0.3), lineWidth: 1)
-                                            .background(RoundedRectangle(cornerRadius: 6).fill(Color.clear))
+                                            .fill(varTone == .clear ? Color.clear : varTone.opacity(0.25))
+                                            .overlay(
+                                                RoundedRectangle(cornerRadius: 6)
+                                                    .stroke(Color.gray.opacity(0.3), lineWidth: 1)
+                                            )
                                         Text("\(varCount)")
                                             .font(.headline.weight(.bold))
-                                            .foregroundStyle(.primary)
+                                            .foregroundStyle((1...5).contains(varCount) ? Color.white : Color.black)
                                     }
                                     .frame(width: 60, height: 28)
                                 } else {
-                                    // Yok count row
-                                    let yokColor: Color = {
+                                    // Yok count row with 1-5 red-toned background
+                                    let yokTone: Color = {
                                         switch yokCount {
                                         case 1: return .yellow
                                         case 2: return .orange
                                         case 3: return .orange.opacity(0.8)
                                         case 4: return .red.opacity(0.8)
                                         case 5: return .red
-                                        default: return .primary
+                                        default: return .clear
                                         }
                                     }()
                                     ZStack {
                                         RoundedRectangle(cornerRadius: 6)
-                                            .stroke(Color.gray.opacity(0.3), lineWidth: 1)
-                                            .background(RoundedRectangle(cornerRadius: 6).fill(Color.clear))
+                                            .fill(yokTone == .clear ? Color.clear : yokTone.opacity(0.25))
+                                            .overlay(
+                                                RoundedRectangle(cornerRadius: 6)
+                                                    .stroke(Color.gray.opacity(0.3), lineWidth: 1)
+                                            )
                                         Text("\(yokCount)")
                                             .font(.headline.weight(.bold))
-                                            .foregroundStyle(yokColor)
+                                            .foregroundStyle((1...5).contains(yokCount) ? Color.white : Color.black)
                                     }
                                     .frame(width: 60, height: 28)
                                 }
@@ -334,6 +449,29 @@ struct TakvimGestureView: View {
                 }
             )) { identified in
                 selectionSheet(for: identified.value)
+            }
+            .sheet(isPresented: Binding(
+                get: { editingRange != nil },
+                set: { if !$0 { editingRange = nil } }
+            )) {
+                if let range = editingRange {
+                    NavigationStack {
+                        VStack(alignment: .leading, spacing: 12) {
+                            Text("Birleştirilmiş Hücre Metni")
+                                .font(.headline)
+                            TextField("Metin girin", text: Binding(
+                                get: { mergedTexts[range] ?? "" },
+                                set: { mergedTexts[range] = $0 }
+                            ))
+                            .textFieldStyle(.roundedBorder)
+                            Spacer()
+                        }
+                        .padding()
+                        .navigationTitle("Metin Düzenle")
+                        .navigationBarTitleDisplayMode(.inline)
+                        .toolbar { ToolbarItem(placement: .topBarTrailing) { Button("Bitti") { editingRange = nil } } }
+                    }
+                }
             }
         }
         .padding()
