@@ -7,8 +7,14 @@
 
 import SwiftUI
 
+private struct IdentifiedValue<T>: Identifiable {
+    let id: String
+    let value: T
+}
+
 struct TakvimGestureView: View {
     private let calendar = Calendar.current
+//    private let dayCellWidth: CGFloat = 36
     @State private var selectedDate: Date = Date()
     
     private let teams: [String] = ["A", "B", "C", "D", "E"]
@@ -23,6 +29,94 @@ struct TakvimGestureView: View {
             .filter { !$0.isEmpty }
     }
 
+    private let cellOptions: [String] = [
+        "Ücretli İzin","Geçici Görevli","Mazeret","Saatlik Mazeret","Rapor","Normal Mesai","Ekip Değişikliği","Yurt dışı Geçici Görev","Refakat İzni","Süt İzni","İdari İzinli","Hastane","Ölüm İzni"
+    ]
+    private let optionAbbreviations: [String: String] = [
+        "Ücretli İzin": "Üİ",
+        "Geçici Görevli": "GG",
+        "Mazeret": "MZ",
+        "Saatlik Mazeret": "SM",
+        "Rapor": "RP",
+        "Normal Mesai": "NM",
+        "Ekip Değişikliği": "ED",
+        "Yurt dışı Geçici Görev": "YG",
+        "Refakat İzni": "Rİ",
+        "Süt İzni": "Sİ",
+        "İdari İzinli": "İİ",
+        "Hastane": "HS",
+        "Ölüm İzni": "Öİ"
+    ]
+    private let optionColors: [String: Color] = [
+        "Ücretli İzin": .orange,
+        "Geçici Görevli": .purple,
+        "Mazeret": .pink,
+        "Saatlik Mazeret": .teal,
+        "Rapor": .red,
+        "Normal Mesai": .green,
+        "Ekip Değişikliği": .blue,
+        "Yurt dışı Geçici Görev": .indigo,
+        "Refakat İzni": .brown,
+        "Süt İzni": .mint,
+        "İdari İzinli": .cyan,
+        "Hastane": .gray,
+        "Ölüm İzni": .black
+    ]
+
+    // Keyed by (dayIndex, rowIndex) to persist per-cell selection
+    @State private var cellSelections: [String: String] = [:]
+
+    // Custom selection UI state
+    @State private var presentingCellKey: String? = nil
+
+    private func cellKey(dayIndex: Int, rowIndex: Int) -> String { "\(dayIndex)-\(rowIndex)" }
+
+    @ViewBuilder
+    private func selectionSheet(for key: String) -> some View {
+        NavigationStack {
+            List {
+                Section("Seçenekler") {
+                    ForEach(cellOptions, id: \.self) { option in
+                        Button(action: {
+                            cellSelections[key] = option
+                            presentingCellKey = nil
+                        }) {
+                            HStack {
+                                let abbr = optionAbbreviations[option] ?? ""
+                                if !abbr.isEmpty {
+                                    Text(abbr)
+                                        .font(.body.weight(.semibold))
+                                        .foregroundStyle(optionColors[option] ?? .secondary)
+                                        .frame(width: 24, alignment: .leading)
+                                }
+                                Text(option)
+                                    .font(.headline.weight(.medium))
+                                Spacer()
+                                if cellSelections[key] == option {
+                                    Image(systemName: "checkmark")
+                                        .foregroundStyle(.blue)
+                                }
+                            }
+                        }
+                    }
+                }
+                if cellSelections[key] != nil && cellSelections[key] != "" {
+                    Section {
+                        Button(role: .destructive) {
+                            cellSelections[key] = ""
+                            presentingCellKey = nil
+                        } label: {
+                            Text("Temizle")
+                        }
+                    }
+                }
+            }
+            .navigationTitle("Seçim Yap")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar { ToolbarItem(placement: .topBarTrailing) { Button("Kapat") { presentingCellKey = nil } } }
+        }
+    }
+
     private var dateRange: ClosedRange<Date> {
         let startComps = DateComponents(year: 2026, month: 1, day: 1)
         let start = calendar.date(from: startComps) ?? Date()
@@ -34,111 +128,215 @@ struct TakvimGestureView: View {
     }
 
     var body: some View {
-        HStack(alignment: .top, spacing: 12) {
-            // Left fixed column label with initials vertically listed under "Ad"
-            VStack(alignment: .leading, spacing: 8) {
-                Text("Ad")
+        VStack(spacing: 12) {
+            // Header with title and navigation buttons
+            HStack {
+                Button(action: { moveTeam(by: -1) }) {
+                    Image(systemName: "chevron.left")
+                        .font(.title3.weight(.semibold))
+                }
+                Spacer()
+                Text(teams[selectedTeamIndex])
+                    .font(.title.weight(.bold))
+                    .foregroundStyle(Color.blue)
+                Spacer()
+                Button(action: { moveTeam(by: 1) }) {
+                    Image(systemName: "chevron.right")
+                        .font(.title3.weight(.semibold))
+                }
+            }
+            .padding(.horizontal)
+
+            // Month navigation and single-row days strip
+            HStack {
+                Button(action: { changeMonth(by: -1) }) {
+                    Image(systemName: "chevron.left.circle.fill").font(.title3)
+                }
+                Spacer()
+                Text(monthYearString(for: selectedDate))
                     .font(.headline)
-                    .padding(.top, 4)
-                // Initials listed vertically under Ad
-                ScrollView(.vertical, showsIndicators: true) {
-                    VStack(alignment: .leading, spacing: 6) {
+                Spacer()
+                Button(action: { changeMonth(by: 1) }) {
+                    Image(systemName: "chevron.right.circle.fill").font(.title3)
+                }
+            }
+            .padding(.horizontal)
+
+            // Days header strip
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(alignment: .top, spacing: 0) {
+                    // Left fixed labels column
+                    VStack(alignment: .leading, spacing: 4) {
+                        // Header spacer to align with day header (weekday + day number)
+                        VStack(spacing: 4) {
+                            Text("")
+                                .font(.caption2)
+                                .foregroundStyle(.secondary)
+                            Text("")
+                                .font(.headline.weight(.semibold))
+                        }
+                        .frame(width: 80, alignment: .leading)
+                        .padding(.vertical, 8)
+
+                        // Initials rows
                         ForEach(initials, id: \.self) { ini in
                             Text(ini)
-                                .font(.caption)
-                                .frame(height: 24, alignment: .leading)
-                                .frame(maxWidth: .infinity, alignment: .leading)
-                                .padding(.horizontal, 6)
-                                .overlay(
-                                    RoundedRectangle(cornerRadius: 6)
-                                        .stroke(Color.secondary.opacity(0.3), lineWidth: 1)
-                                )
+                                .font(.callout.weight(.semibold))
+                                .lineLimit(1)
+                                .minimumScaleFactor(0.7)
+                                .frame(width: 80, alignment: .leading)
+                                .frame(height: 28)
                         }
+                        // Var and Yok rows
+                        Text("Var")
+                            .font(.callout.weight(.semibold))
+                            .frame(width: 80, alignment: .leading)
+                            .frame(height: 28)
+                        Text("Yok")
+                            .font(.callout.weight(.semibold))
+                            .frame(width: 80, alignment: .leading)
+                            .frame(height: 28)
                     }
-                }
-            }
-            .frame(width: 60)
-            .padding(.leading)
 
-            // Main calendar content
-            VStack(spacing: 12) {
-                VStack(alignment: .leading, spacing: 12) {
-                    // 
-                }
+                    // Day columns (no initials here)
+                    ForEach(daysInMonth(of: selectedDate), id: \.self) { day in
+                        let isRed = isRedDay(day)
+                        let isBlue = isBlueDay(day)
+                        let isToday = calendar.isDateInToday(day)
 
-                VStack(spacing: 12) {
-                    // Header with title and navigation buttons
-                    HStack {
-                        Button(action: { moveTeam(by: -1) }) {
-                            Image(systemName: "chevron.left")
+                        let textColor: Color = isRed ? .red : (isBlue ? .blue : .primary)
+                        let borderColor: Color = isToday ? .blue : (isRed ? .red : (isBlue ? .blue : Color.gray.opacity(0.3)))
+                        let borderWidth: CGFloat = isToday ? 2 : 1
+
+                        VStack(spacing: 4) {
+                            // Day header
+                            Text(weekdayShort(for: day))
+                                .font(.caption.weight(.medium))
+                                .foregroundStyle(.secondary)
+                            Text(dayNumber(for: day))
                                 .font(.title3.weight(.semibold))
-                        }
-                        Spacer()
-                        Text(teams[selectedTeamIndex])
-                            .font(.title.weight(.bold))
-                            .foregroundStyle(Color.blue)
-                        Spacer()
-                        Button(action: { moveTeam(by: 1) }) {
-                            Image(systemName: "chevron.right")
-                                .font(.title3.weight(.semibold))
-                        }
-                    }
-                    .padding(.horizontal)
 
-                    // Month navigation and single-row days strip
-                    HStack {
-                        Button(action: { changeMonth(by: -1) }) {
-                            Image(systemName: "chevron.left.circle.fill").font(.title3)
-                        }
-                        Spacer()
-                        Text(monthYearString(for: selectedDate))
-                            .font(.headline)
-                        Spacer()
-                        Button(action: { changeMonth(by: 1) }) {
-                            Image(systemName: "chevron.right.circle.fill").font(.title3)
-                            
-                        }
-                    }
-                    .padding(.horizontal)
-                    
-                    ScrollView(.horizontal, showsIndicators: false) {
-                        HStack(spacing: 8) {
-                            ForEach(daysInMonth(of: selectedDate), id: \.self) { day in
-                                let isRed = isRedDay(day)
-                                let isBlue = isBlueDay(day)
-                                let isToday = calendar.isDateInToday(day)
+                            // Interactive rows aligned with left labels (only initials rows + Var/Yok)
+                            ForEach(0..<(initials.count + 2), id: \.self) { r in
+                                let dayIndex = calendar.component(.day, from: day)
+                                let key = cellKey(dayIndex: dayIndex, rowIndex: r)
 
-                                let textColor: Color = isRed ? .red : (isBlue ? .blue : .primary)
-                                let borderColor: Color = isToday ? .blue : (isRed ? .red : (isBlue ? .blue : Color.gray.opacity(0.3)))
-                                let borderWidth: CGFloat = isToday ? 2 : 1
+                                // Compute counts once per column
+                                let filledCount: Int = {
+                                    var c = 0
+                                    for i in 0..<initials.count {
+                                        let k = cellKey(dayIndex: dayIndex, rowIndex: i)
+                                        if let v = cellSelections[k], !v.isEmpty { c += 1 }
+                                    }
+                                    return c
+                                }()
+                                let emptyCount = max(0, initials.count - filledCount)
+                                let yokCount = filledCount
+                                let varCount = emptyCount
 
-                                VStack(spacing: 4) {
-                                    Text(weekdayShort(for: day))
-                                        .font(.caption2)
-                                        .foregroundStyle(.secondary)
-                                    Text(dayNumber(for: day))
-                                        .font(.headline.weight(.semibold))
+                                if r < initials.count {
+                                    Button {
+                                        presentingCellKey = key
+                                    } label: {
+                                        ZStack {
+                                            RoundedRectangle(cornerRadius: 6)
+                                                .stroke(Color.gray.opacity(0.3), lineWidth: 1)
+                                                .background(RoundedRectangle(cornerRadius: 6).fill(Color.clear))
+                                            let full = cellSelections[key] ?? ""
+                                            let abbrev = optionAbbreviations[full] ?? ""
+                                            let color = optionColors[full] ?? .primary
+                                            Text(abbrev)
+                                                .font(.caption.weight(.semibold))
+                                                .foregroundStyle(color)
+                                                .lineLimit(1)
+                                                .minimumScaleFactor(0.6)
+                                                .padding(.horizontal, 2)
+                                        }
+                                    }
+                                    .buttonStyle(.plain)
+                                    .frame(width: 60, height: 28)
+                                } else if r == initials.count {
+                                    // Var count row
+                                    ZStack {
+                                        RoundedRectangle(cornerRadius: 6)
+                                            .stroke(Color.gray.opacity(0.3), lineWidth: 1)
+                                            .background(RoundedRectangle(cornerRadius: 6).fill(Color.clear))
+                                        Text("\(varCount)")
+                                            .font(.headline.weight(.bold))
+                                            .foregroundStyle(.primary)
+                                    }
+                                    .frame(width: 60, height: 28)
+                                } else {
+                                    // Yok count row
+                                    let yokColor: Color = {
+                                        switch yokCount {
+                                        case 1: return .yellow
+                                        case 2: return .orange
+                                        case 3: return .orange.opacity(0.8)
+                                        case 4: return .red.opacity(0.8)
+                                        case 5: return .red
+                                        default: return .primary
+                                        }
+                                    }()
+                                    ZStack {
+                                        RoundedRectangle(cornerRadius: 6)
+                                            .stroke(Color.gray.opacity(0.3), lineWidth: 1)
+                                            .background(RoundedRectangle(cornerRadius: 6).fill(Color.clear))
+                                        Text("\(yokCount)")
+                                            .font(.headline.weight(.bold))
+                                            .foregroundStyle(yokColor)
+                                    }
+                                    .frame(width: 60, height: 28)
                                 }
-                                .padding(.vertical, 8)
-                                .padding(.horizontal, 10)
-                                .background(
-                                    RoundedRectangle(cornerRadius: 10)
-                                        .fill(isToday ? Color.yellow.opacity(0.25) : Color.clear)
-                                )
-                                .overlay(
-                                    RoundedRectangle(cornerRadius: 10)
-                                        .stroke(borderColor, lineWidth: borderWidth)
-                                )
-                                .foregroundStyle(textColor)
-                                .allowsHitTesting(false)
                             }
                         }
-                        .padding(.horizontal)
+                        .padding(.vertical, 8)
+                        .padding(.horizontal, 10)
+                        .background(
+                            RoundedRectangle(cornerRadius: 10)
+                                .fill(isToday ? Color.yellow.opacity(0.25) : Color.clear)
+                        )
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 10)
+                                .stroke(borderColor, lineWidth: borderWidth)
+                        )
+                        .foregroundStyle(textColor)
                     }
                 }
-                .padding()
+                .padding(.horizontal)
+            }
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 8) {
+                    
+                    ForEach(cellOptions, id: \.self) { option in
+                        let abbr = optionAbbreviations[option] ?? ""
+                        if !abbr.isEmpty {
+                            HStack(spacing: 4) {
+                                Text(abbr)
+                                    .font(.body.weight(.semibold))
+                                    .foregroundStyle(optionColors[option] ?? .primary)
+                                Text(option)
+                                    .font(.callout)
+                                    .foregroundStyle(.secondary)
+                            }
+                        }
+                    }
+                }
+                .padding(.horizontal)
+            }
+            .padding(.top, 8)
+            .sheet(item: Binding(
+                get: {
+                    presentingCellKey.map { IdentifiedValue(id: $0, value: $0) }
+                },
+                set: { newValue in
+                    presentingCellKey = newValue?.value
+                }
+            )) { identified in
+                selectionSheet(for: identified.value)
             }
         }
+        .padding()
     }
     
     private func moveTeam(by offset: Int) {
