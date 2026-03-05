@@ -6,6 +6,7 @@
 //
 
 import SwiftUI
+import SwiftData
 struct GeçiciGörevlerGestureView: View {
     var body: some View {
         Text("Tapped!")

@@ -1,4 +1,5 @@
 import SwiftUI
+import SwiftData
 
 struct MenuView: View {
     var body: some View {

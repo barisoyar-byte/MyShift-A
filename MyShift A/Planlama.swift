@@ -6,6 +6,7 @@
 //
 
 import SwiftUI
+import SwiftData
 
 // Shared storage keys for initials saved by EkipView
 private let ekipInitialsKeyPrimary = "ekip_initials_csv"
@@ -76,6 +77,27 @@ struct PlanlamaView: View {
     @State private var selectedDay: Date? = nil
     private let calendar = Calendar.current
     
+    // Insert new helper functions for per-day storage here
+    private func dayKey(for date: Date) -> String {
+        let day = calendar.startOfDay(for: date)
+        let ts = Int(day.timeIntervalSince1970)
+        return "planlama_day_\(selectedTeamIndex)_\(ts)"
+    }
+
+    private func saveDaySelections(for date: Date) {
+        let key = dayKey(for: date)
+        if let data = try? JSONEncoder().encode(selections) {
+            UserDefaults.standard.set(data, forKey: key)
+        }
+    }
+
+    private func loadDaySelections(for date: Date) -> [[String]]? {
+        let key = dayKey(for: date)
+        guard let data = UserDefaults.standard.data(forKey: key),
+              let decoded = try? JSONDecoder().decode([[String]].self, from: data) else { return nil }
+        return decoded
+    }
+
     @State private var selections: [[String]] = Array(repeating: Array(repeating: "", count: 7), count: 10)
     @State private var monthMatrix: [[String]] = []
     
@@ -131,7 +153,7 @@ struct PlanlamaView: View {
     
     private func isDuplicateInitial(at row: Int, col: Int) -> Bool {
         // Exclude the last row entirely
-        if row == 8 { return false }
+        if row == 9 { return false }
         // Only apply to valid data columns
         guard (1...6).contains(col) else { return false }
         let current = selections[row][col]
@@ -141,8 +163,8 @@ struct PlanlamaView: View {
         func shouldCompare(_ r1: Int, _ c1: Int, _ r2: Int, _ c2: Int) -> Bool {
             // Same cell, skip
             if r1 == r2 && c1 == c2 { return false }
-            // Allow NOTAM and ARI to be the same: row 7 has NOTAM group across columns (2..4) and ARI at column 6
-            if r1 == 7 && r2 == 7 {
+            // Allow NOTAM and ARI to be the same: row 8 has NOTAM group across columns (2..4) and ARI at column 6
+            if r1 == 8 && r2 == 8 {
                 let isNotam1 = (2...4).contains(c1)
                 let isAri1 = (c1 == 6)
                 let isNotam2 = (2...4).contains(c2)
@@ -347,6 +369,69 @@ struct PlanlamaView: View {
         }
     }
     
+    private struct DayPill: View {
+        let day: Date
+        let calendar: Calendar
+        let isRed: Bool
+        let isBlue: Bool
+        let isToday: Bool
+        let isSelected: Bool
+        let onTap: () -> Void
+
+        private var textColor: Color {
+            if isRed { return .red }
+            if isBlue { return .blue }
+            return .primary
+        }
+
+        private var borderColor: Color {
+            if isSelected { return Color.accentColor }
+            if isToday { return .blue }
+            if isRed { return .red }
+            if isBlue { return .blue }
+            return Color.gray.opacity(0.3)
+        }
+
+        private var borderWidth: CGFloat { isToday ? 2 : 1 }
+
+        private var backgroundFill: Color {
+            isSelected ? Color.accentColor.opacity(0.25) : (isToday ? Color.yellow.opacity(0.25) : Color.clear)
+        }
+
+        private func weekdayShort() -> String {
+            let symbols = calendar.shortWeekdaySymbols
+            let idx = calendar.component(.weekday, from: day) - 1
+            return symbols[idx]
+        }
+
+        private func dayNumber() -> String {
+            String(calendar.component(.day, from: day))
+        }
+
+        var body: some View {
+            VStack(spacing: 4) {
+                Text(weekdayShort())
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+                Text(dayNumber())
+                    .font(.headline.weight(.semibold))
+            }
+            .padding(.vertical, 8)
+            .padding(.horizontal, 10)
+            .background(
+                RoundedRectangle(cornerRadius: 10)
+                    .fill(backgroundFill)
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 10)
+                    .stroke(borderColor, lineWidth: isSelected ? 3 : borderWidth)
+            )
+            .foregroundStyle(textColor)
+            .contentShape(RoundedRectangle(cornerRadius: 10))
+            .onTapGesture { onTap() }
+        }
+    }
+    
     struct DayShiftGrid: View {
         @Binding var selections: [[String]]
         let initials: [String]
@@ -448,9 +533,10 @@ struct PlanlamaView: View {
                             .frame(minWidth: 80, minHeight: 36)
                         }
 
-                        ForEach(2..<9, id: \.self) { row in
+                        ForEach(2..<10, id: \.self) { row in
                             GridRow {
-                                if row == 7 {
+                                if row == 8 {
+                                    // NOTAM row: merge 2-4, static label in 5, merge 6-7
                                     ZStack {
                                         RoundedRectangle(cornerRadius: 6)
                                             .stroke(Color.secondary.opacity(0.5), lineWidth: 1)
@@ -460,35 +546,35 @@ struct PlanlamaView: View {
                                             .foregroundStyle(.primary)
                                             .padding(4)
                                     }
-                                    .frame(minWidth: 80, minHeight: row == 8 ? 72 : 36)
+                                    .frame(minWidth: 80, minHeight: 36)
 
                                     ZStack {
                                         RoundedRectangle(cornerRadius: 6)
                                             .stroke(Color.secondary.opacity(0.5), lineWidth: 1)
                                         PickerCell(binding: bindingForSelection(row, 2), options: initials, tintColor: isDuplicateInitial(row, 2) ? .red : nil)
                                     }
-                                    .frame(minWidth: 80, minHeight: row == 8 ? 72 : 36)
-                                    .gridCellColumns(3)
+                                    .frame(minWidth: 80, minHeight: 36)
+                                    .gridCellColumns(3) // columns 2-4
 
                                     ZStack {
                                         RoundedRectangle(cornerRadius: 6)
                                             .stroke(Color.secondary.opacity(0.5), lineWidth: 1)
-                                        Text("ARI")
+                                        Text("Arı")
                                             .font(.subheadline)
                                             .bold()
                                             .foregroundStyle(.primary)
                                             .padding(4)
                                     }
-                                    .frame(minWidth: 80, minHeight: row == 8 ? 72 : 36)
+                                    .frame(minWidth: 80, minHeight: 36) // column 5
 
                                     ZStack {
                                         RoundedRectangle(cornerRadius: 6)
                                             .stroke(Color.secondary.opacity(0.5), lineWidth: 1)
                                         PickerCell(binding: bindingForSelection(row, 6), options: initials, tintColor: isDuplicateInitial(row, 6) ? .red : nil)
                                     }
-                                    .frame(minWidth: 80, minHeight: row == 8 ? 72 : 36)
-                                    .gridCellColumns(2)
-                                } else if row == 8 {
+                                    .frame(minWidth: 80, minHeight: 36)
+                                    .gridCellColumns(2) // columns 6-7
+                                } else if row == 9 {
                                     ZStack {
                                         RoundedRectangle(cornerRadius: 6)
                                             .stroke(Color.secondary.opacity(0.5), lineWidth: 1)
@@ -529,7 +615,7 @@ struct PlanlamaView: View {
                                                     .padding(4)
                                             }
                                         }
-                                        .frame(minWidth: 80, minHeight: row == 8 ? 72 : 36)
+                                        .frame(minWidth: 80, minHeight: row == 9 ? 72 : 36)
                                     }
                                 }
                             }
@@ -585,42 +671,25 @@ struct PlanlamaView: View {
                     ForEach(daysInMonth(of: selectedDate).filter { day in
                         return day >= calendar.startOfDay(for: yesterday)
                     }, id: \.self) { day in
-                        let isRed = isRedDay(day)
-                        let isBlue = isBlueDay(day)
-                        let isToday = calendar.isDateInToday(day)
-                        let isSelectable = isRed || isBlue
-                        let isSelected = selectedDay.map { calendar.isDate($0, inSameDayAs: day) } ?? false
-                        
-                        let textColor: Color = isRed ? .red : (isBlue ? .blue : .primary)
-                        let borderColor: Color = isToday ? .blue : (isRed ? .red : (isBlue ? .blue : Color.gray.opacity(0.3)))
-                        let borderWidth: CGFloat = isToday ? 2 : 1
+                        let red = isRedDay(day)
+                        let blue = isBlueDay(day)
+                        let todayFlag = calendar.isDateInToday(day)
+                        let selectable = red || blue
+                        let selectedFlag = selectedDay.map { calendar.isDate($0, inSameDayAs: day) } ?? false
 
-                        VStack(spacing: 4) {
-                            Text(weekdayShort(for: day))
-                                .font(.caption2)
-                                .foregroundStyle(.secondary)
-                            Text(dayNumber(for: day))
-                                .font(.headline.weight(.semibold))
-                        }
-                        .padding(.vertical, 8)
-                        .padding(.horizontal, 10)
-                        .background(
-                            RoundedRectangle(cornerRadius: 10)
-                                .fill(isSelected ? Color.accentColor.opacity(0.25) : (isToday ? Color.yellow.opacity(0.25) : Color.clear))
-                        )
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 10)
-                                .stroke(isSelected ? Color.accentColor : borderColor, lineWidth: isSelected ? 3 : borderWidth)
-                        )
-                        .foregroundStyle(textColor)
-                        .contentShape(RoundedRectangle(cornerRadius: 10))
-                        .opacity(isSelectable ? 1.0 : 0.4)
-                        .onTapGesture {
-                            if isSelectable {
-                                selectedDay = day
+                        DayPill(
+                            day: day,
+                            calendar: calendar,
+                            isRed: red,
+                            isBlue: blue,
+                            isToday: todayFlag,
+                            isSelected: selectedFlag,
+                            onTap: {
+                                if selectable { selectedDay = day }
                             }
-                        }
-                        .allowsHitTesting(isSelectable)
+                        )
+                        .opacity(selectable ? 1.0 : 0.4)
+                        .allowsHitTesting(selectable)
                     }
                 }
                 .padding(.horizontal)
@@ -642,6 +711,15 @@ struct PlanlamaView: View {
             let today = calendar.startOfDay(for: Date())
             if let nearest = nearestSelectableDay(in: selectedDate, from: today) {
                 selectedDay = nearest
+                
+                // Load saved selections for the selected day or reset
+                if let d = selectedDay {
+                    if let loaded = loadDaySelections(for: d) {
+                        selections = loaded
+                    } else {
+                        selections = Array(repeating: Array(repeating: "", count: 7), count: 10)
+                    }
+                }
             }
         }
         .onChange(of: selectedDate) { _, _ in
@@ -651,6 +729,20 @@ struct PlanlamaView: View {
         }
         .onChange(of: monthMatrix) { _, _ in
             saveMonthMatrix(for: selectedDate)
+        }
+        .onChange(of: selectedDay) { _, newDay in
+            if let d = newDay {
+                if let loaded = loadDaySelections(for: d) {
+                    selections = loaded
+                } else {
+                    selections = Array(repeating: Array(repeating: "", count: 7), count: 10)
+                }
+            }
+        }
+        .onChange(of: selections) { _, _ in
+            if let d = selectedDay {
+                saveDaySelections(for: d)
+            }
         }
         .padding()
     }

@@ -1,4 +1,5 @@
 import SwiftUI
+import SwiftData
 
 struct KoşullarView: View {
     var body: some View {

@@ -22,9 +22,13 @@ private struct ForceLandscapeController: UIViewControllerRepresentable {
     private final class Controller: UIViewController {
         override func viewDidAppear(_ animated: Bool) {
             super.viewDidAppear(animated)
-            let value = UIInterfaceOrientation.landscapeRight.rawValue
-            UIDevice.current.setValue(value, forKey: "orientation")
-            self.setNeedsUpdateOfSupportedInterfaceOrientations()
+            guard let scene = view.window?.windowScene else { return }
+            let preferences = UIWindowScene.GeometryPreferences.iOS(interfaceOrientations: [.landscapeLeft, .landscapeRight])
+            scene.requestGeometryUpdate(preferences) { error in
+                #if DEBUG
+                print("requestGeometryUpdate completion: \(error.localizedDescription)")
+                #endif
+            }
         }
         override var supportedInterfaceOrientations: UIInterfaceOrientationMask { [.landscapeLeft, .landscapeRight] }
         override var preferredInterfaceOrientationForPresentation: UIInterfaceOrientation { .landscapeRight }
@@ -39,7 +43,7 @@ private struct ForceLandscapeModifier: ViewModifier {
 }
 
 extension View {
-    func forceLandscapeIfPossible() -> some View { self.modifier(ForceLandscapeModifier()) }
+    func msa_forceLandscapeIfPossible() -> some View { self.modifier(ForceLandscapeModifier()) }
 }
 #endif
 
@@ -49,7 +53,7 @@ struct TakvimWrapperView: View {
     var body: some View {
         #if canImport(UIKit)
         TakvimGestureView()
-            .forceLandscapeIfPossible()
+            .msa_forceLandscapeIfPossible()
         #else
         TakvimGestureView()
         #endif

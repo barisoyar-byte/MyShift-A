@@ -1,4 +1,5 @@
 import SwiftUI
+import SwiftData
 
 struct İstatistiklerView: View {
     var body: some View {

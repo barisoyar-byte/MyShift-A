@@ -8,8 +8,8 @@
 
 
 
-
 import SwiftUI
+import SwiftData
 
 // Shared storage keys for initials saved by EkipView
 private let ekipInitialsKeyPrimary = "ekip_initials_csv"
@@ -212,7 +212,7 @@ struct ArşivGestureView: View {
     
     private func isDuplicateInitial(at row: Int, col: Int) -> Bool {
         // Exclude the last row entirely
-        if row == 8 { return false }
+        if row == 9 { return false }
         // Only apply to valid data columns
         guard (1...6).contains(col) else { return false }
         let current = selections[row][col]
@@ -222,9 +222,9 @@ struct ArşivGestureView: View {
         func shouldCompare(_ r1: Int, _ c1: Int, _ r2: Int, _ c2: Int) -> Bool {
             // Same cell, skip
             if r1 == r2 && c1 == c2 { return false }
-            // Allow NOTAM and ARI to be the same: row 7 has NOTAM group across columns (2..4) and ARI at column 6
-            // If both positions are on row 7 and one is in NOTAM group and the other is ARI column, ignore comparison
-            if r1 == 7 && r2 == 7 {
+            // Allow NOTAM and ARI to be the same: row 8 has NOTAM group across columns (2..4) and ARI at column 6
+            // If both positions are on row 8 and one is in NOTAM group and the other is ARI column, ignore comparison
+            if r1 == 8 && r2 == 8 {
                 let isNotam1 = (2...4).contains(c1)
                 let isAri1 = (c1 == 6)
                 let isNotam2 = (2...4).contains(c2)
@@ -557,9 +557,9 @@ struct ArşivGestureView: View {
                             .frame(minWidth: 80, minHeight: 36)
                         }
 
-                        ForEach(2..<9, id: \.self) { row in
+                        ForEach(2..<10, id: \.self) { row in
                             GridRow {
-                                if row == 7 {
+                                if row == 8 {
                                     ZStack {
                                         RoundedRectangle(cornerRadius: 6)
                                             .stroke(Color.secondary.opacity(0.5), lineWidth: 1)
@@ -569,14 +569,14 @@ struct ArşivGestureView: View {
                                             .foregroundStyle(isLocked ? .secondary : .primary)
                                             .padding(4)
                                     }
-                                    .frame(minWidth: 80, minHeight: row == 8 ? 72 : 36)
+                                    .frame(minWidth: 80, minHeight: row == 9 ? 72 : 36)
 
                                     ZStack {
                                         RoundedRectangle(cornerRadius: 6)
                                             .stroke(Color.secondary.opacity(0.5), lineWidth: 1)
                                         PickerCell(binding: bindingForSelection(row, 2), options: initials, tintColor: nil)
                                     }
-                                    .frame(minWidth: 80, minHeight: row == 8 ? 72 : 36)
+                                    .frame(minWidth: 80, minHeight: row == 9 ? 72 : 36)
                                     .gridCellColumns(3)
                                     .disabled(isLocked)
 
@@ -589,17 +589,17 @@ struct ArşivGestureView: View {
                                             .foregroundStyle(isLocked ? .secondary : .primary)
                                             .padding(4)
                                     }
-                                    .frame(minWidth: 80, minHeight: row == 8 ? 72 : 36)
+                                    .frame(minWidth: 80, minHeight: row == 9 ? 72 : 36)
 
                                     ZStack {
                                         RoundedRectangle(cornerRadius: 6)
                                             .stroke(Color.secondary.opacity(0.5), lineWidth: 1)
                                         PickerCell(binding: bindingForSelection(row, 6), options: initials, tintColor: nil)
                                     }
-                                    .frame(minWidth: 80, minHeight: row == 8 ? 72 : 36)
+                                    .frame(minWidth: 80, minHeight: row == 9 ? 72 : 36)
                                     .gridCellColumns(2)
                                     .disabled(isLocked)
-                                } else if row == 8 {
+                                } else if row == 9 {
                                     ZStack {
                                         RoundedRectangle(cornerRadius: 6)
                                             .stroke(Color.secondary.opacity(0.5), lineWidth: 1)
@@ -645,7 +645,7 @@ struct ArşivGestureView: View {
                                                     .padding(4)
                                             }
                                         }
-                                        .frame(minWidth: 80, minHeight: row == 8 ? 72 : 36)
+                                        .frame(minWidth: 80, minHeight: row == 9 ? 72 : 36)
                                     }
                                 }
                             }

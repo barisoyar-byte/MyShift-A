@@ -6,6 +6,7 @@
 //
 
 import SwiftUI
+import SwiftData
 
 private struct IdentifiedValue<T>: Identifiable {
     let id: String
@@ -22,6 +23,7 @@ struct TakvimGestureView: View {
 
     // Load initials written by EkipView via UserDefaults as CSV
     @AppStorage("userInitials") private var userInitialsCSV: String = ""
+    @AppStorage("celloptions") private var izintürü: Int = 0
     private var initials: [String] {
         userInitialsCSV
             .split(separator: ",")
@@ -63,7 +65,7 @@ struct TakvimGestureView: View {
         "Ölüm İzni": .black
     ]
 
-    // Keyed by (dayIndex, rowIndex) to persist per-cell selection
+    // Keyed by (dateKey, rowIndex) to persist per-cell selection
     @State private var cellSelections: [String: String] = [:]
 
     // Custom selection UI state
@@ -79,7 +81,15 @@ struct TakvimGestureView: View {
     @State private var mergedTexts: [ClosedRange<Int>: String] = [:]
     @State private var editingRange: ClosedRange<Int>? = nil
 
-    private func cellKey(dayIndex: Int, rowIndex: Int) -> String { "\(dayIndex)-\(rowIndex)" }
+    private func dateKey(for date: Date) -> String {
+        let d = calendar.startOfDay(for: date)
+        let comps = calendar.dateComponents([.year, .month, .day], from: d)
+        let y = comps.year ?? 0
+        let m = comps.month ?? 0
+        let dd = comps.day ?? 0
+        return String(format: "%04d%02d%02d", y, m, dd)
+    }
+    private func cellKey(date: Date, rowIndex: Int) -> String { "\(dateKey(for: date))-\(rowIndex)" }
     
     private func isDay(_ dayIndex: Int, in range: ClosedRange<Int>) -> Bool { range.contains(dayIndex) }
     private func isDayInAnyMergedRange(_ dayIndex: Int) -> Bool { mergedRanges.contains(where: { $0.contains(dayIndex) }) }
@@ -89,6 +99,40 @@ struct TakvimGestureView: View {
     }
     private func isStart(of range: ClosedRange<Int>, at dayIndex: Int) -> Bool { range.lowerBound == dayIndex }
 
+    
+    // Added helper functions for per-day storage keys and load/save
+    private func dayStorageKey(for date: Date) -> String {
+        let day = calendar.startOfDay(for: date)
+        let ts = Int(day.timeIntervalSince1970)
+        return "takvim_day_\(selectedTeamIndex)_\(ts)"
+    }
+
+    private func saveSelections(for date: Date) {
+        let prefix = dateKey(for: date) + "-"
+        var perDay: [String: String] = [:]
+        for (k, v) in cellSelections {
+            if k.hasPrefix(prefix) {
+                perDay[k] = v
+            }
+        }
+        if let data = try? JSONEncoder().encode(perDay) {
+            UserDefaults.standard.set(data, forKey: dayStorageKey(for: date))
+        }
+    }
+
+    private func loadSelections(for date: Date) {
+        let key = dayStorageKey(for: date)
+        let prefix = dateKey(for: date) + "-"
+        guard let data = UserDefaults.standard.data(forKey: key),
+              let decoded = try? JSONDecoder().decode([String: String].self, from: data) else {
+            cellSelections = cellSelections.filter { !($0.key.hasPrefix(prefix)) }
+            return
+        }
+        var newMap = cellSelections.filter { !($0.key.hasPrefix(prefix)) }
+        for (k, v) in decoded { newMap[k] = v }
+        cellSelections = newMap
+    }
+    
     @ViewBuilder
     private func selectionSheet(for key: String) -> some View {
         NavigationStack {
@@ -317,14 +361,13 @@ struct TakvimGestureView: View {
 
                             // Interactive rows aligned with left labels (only initials rows + Var/Yok)
                             ForEach(0..<(initials.count + 2), id: \.self) { r in
-                                let dayIndex = calendar.component(.day, from: day)
-                                let key = cellKey(dayIndex: dayIndex, rowIndex: r)
+                                let key = cellKey(date: day, rowIndex: r)
 
                                 // Compute counts once per column
                                 let filledCount: Int = {
                                     var c = 0
                                     for i in 0..<initials.count {
-                                        let k = cellKey(dayIndex: dayIndex, rowIndex: i)
+                                        let k = cellKey(date: day, rowIndex: i)
                                         if let v = cellSelections[k], !v.isEmpty { c += 1 }
                                     }
                                     return c
@@ -475,6 +518,15 @@ struct TakvimGestureView: View {
             }
         }
         .padding()
+        .onChange(of: selectedDate) { _, newDate in
+            loadSelections(for: newDate)
+        }
+        .onChange(of: cellSelections) { _, _ in
+            saveSelections(for: selectedDate)
+        }
+        .onAppear {
+            loadSelections(for: selectedDate)
+        }
     }
     
     private func moveTeam(by offset: Int) {
@@ -575,10 +627,14 @@ private struct ForceLandscapeController: UIViewControllerRepresentable {
     private final class Controller: UIViewController {
         override func viewDidAppear(_ animated: Bool) {
             super.viewDidAppear(animated)
-            // Attempt to set device orientation to landscape
-            let value = UIInterfaceOrientation.landscapeRight.rawValue
-            UIDevice.current.setValue(value, forKey: "orientation")
-            self.setNeedsUpdateOfSupportedInterfaceOrientations()
+            guard let scene = view.window?.windowScene else { return }
+            // Ask the system to switch to landscape geometry for this scene
+            let preferences = UIWindowScene.GeometryPreferences.iOS(interfaceOrientations: [.landscapeLeft, .landscapeRight])
+            scene.requestGeometryUpdate(preferences) { error in
+                #if DEBUG
+                print("requestGeometryUpdate completion: \(error.localizedDescription)")
+                #endif
+            }
         }
 
         override var supportedInterfaceOrientations: UIInterfaceOrientationMask { [.landscapeLeft, .landscapeRight] }
@@ -594,9 +650,6 @@ private struct ForceLandscapeModifier: ViewModifier {
     }
 }
 
-private extension View {
-    func msa_forceLandscapeIfPossible() -> some View { self.modifier(ForceLandscapeModifier()) }
-}
 #endif
 
 // Keep PlanlamaView as a separate top-level view
