@@ -1,9 +1,13 @@
 import SwiftUI
 import SwiftData
+import Foundation
+import Combine
+
 #if os(iOS)
 import UIKit
 #endif
 
+@MainActor
 struct EkipView: View {
     // Data source for the list
     @State private var entries: [(name: String, initial: String)] = []
@@ -163,6 +167,7 @@ struct EkipView: View {
     }
 }
 
+@MainActor
 struct EkipEntryView: View {
     @Environment(\.dismiss) private var dismiss
     @State private var name: String = ""

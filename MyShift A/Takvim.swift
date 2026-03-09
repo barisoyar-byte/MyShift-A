@@ -7,6 +7,10 @@
 
 import SwiftUI
 import SwiftData
+import Foundation
+import Combine
+
+@MainActor
 
 private struct IdentifiedValue<T>: Identifiable {
     let id: String
@@ -81,6 +85,8 @@ struct TakvimGestureView: View {
     @State private var mergedTexts: [ClosedRange<Int>: String] = [:]
     @State private var editingRange: ClosedRange<Int>? = nil
 
+    @State private var lastChangedKey: String? = nil
+
     private func dateKey(for date: Date) -> String {
         let d = calendar.startOfDay(for: date)
         let comps = calendar.dateComponents([.year, .month, .day], from: d)
@@ -90,6 +96,14 @@ struct TakvimGestureView: View {
         return String(format: "%04d%02d%02d", y, m, dd)
     }
     private func cellKey(date: Date, rowIndex: Int) -> String { "\(dateKey(for: date))-\(rowIndex)" }
+    
+    private func dateFromDateKey(_ s: String) -> Date? {
+        let df = DateFormatter()
+        df.calendar = calendar
+        df.locale = Locale(identifier: "tr_TR")
+        df.dateFormat = "yyyyMMdd"
+        return df.date(from: s)
+    }
     
     private func isDay(_ dayIndex: Int, in range: ClosedRange<Int>) -> Bool { range.contains(dayIndex) }
     private func isDayInAnyMergedRange(_ dayIndex: Int) -> Bool { mergedRanges.contains(where: { $0.contains(dayIndex) }) }
@@ -141,6 +155,7 @@ struct TakvimGestureView: View {
                     ForEach(cellOptions, id: \.self) { option in
                         Button(action: {
                             cellSelections[key] = option
+                            lastChangedKey = key
                             presentingCellKey = nil
                         }) {
                             HStack {
@@ -167,6 +182,7 @@ struct TakvimGestureView: View {
                     Section {
                         Button(role: .destructive) {
                             cellSelections[key] = ""
+                            lastChangedKey = key
                             presentingCellKey = nil
                         } label: {
                             Text("Temizle")
@@ -225,244 +241,236 @@ struct TakvimGestureView: View {
             }
             .padding(.horizontal)
 
-            // Days header strip
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(alignment: .top, spacing: 0) {
-                    // Left fixed labels column
-                    VStack(alignment: .leading, spacing: 4) {
-                        // Header spacer to align with day header (weekday + day number)
-                        VStack(spacing: 4) {
-                            Text("")
-                                .font(.caption2)
-                                .foregroundStyle(.secondary)
-                            Text("")
-                                .font(.headline.weight(.semibold))
-                        }
-                        .frame(width: 80, alignment: .leading)
-                        .padding(.vertical, 8)
-                        
-                        // Frameless blank row above initials (first column only)
-                        Color.clear
-                            .frame(width: 80, height: 28)
+            // Days header strip with fixed left labels
+            HStack(alignment: .top, spacing: 0) {
+                // Left fixed labels column (stays visible)
+                VStack(alignment: .leading, spacing: 4) {
+                    VStack(spacing: 4) {
+                        Text("")
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                        Text("")
+                            .font(.headline.weight(.semibold))
+                    }
+                    .frame(width: 80, alignment: .leading)
+                    .padding(.vertical, 8)
 
-                        // Initials rows
-                        ForEach(initials, id: \.self) { ini in
-                            Text(ini)
-                                .font(.callout.weight(.semibold))
-                                .lineLimit(1)
-                                .minimumScaleFactor(0.7)
-                                .frame(width: 80, alignment: .leading)
-                                .frame(height: 28)
-                        }
-                        // Var and Yok rows
-                        Text("Var")
+                    Color.clear
+                        .frame(width: 80, height: 28)
+
+                    ForEach(initials, id: \.self) { ini in
+                        Text(ini)
                             .font(.callout.weight(.semibold))
-                            .frame(width: 80, alignment: .leading)
-                            .frame(height: 28)
-                        Text("Yok")
-                            .font(.callout.weight(.semibold))
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.7)
                             .frame(width: 80, alignment: .leading)
                             .frame(height: 28)
                     }
+                    Text("Var")
+                        .font(.callout.weight(.semibold))
+                        .frame(width: 80, alignment: .leading)
+                        .frame(height: 28)
+                    Text("Yok")
+                        .font(.callout.weight(.semibold))
+                        .frame(width: 80, alignment: .leading)
+                        .frame(height: 28)
+                }
 
-                    // Day columns (no initials here)
-                    ForEach(daysInMonth(of: selectedDate), id: \.self) { day in
-                        let isRed = isRedDay(day)
-                        let isBlue = isBlueDay(day)
-                        let isToday = calendar.isDateInToday(day)
+                // Scrollable day columns
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(alignment: .top, spacing: 0) {
+                        ForEach(daysInMonth(of: selectedDate), id: \.self) { day in
+                            let isRed = isRedDay(day)
+                            let isBlue = isBlueDay(day)
+                            let isToday = calendar.isDateInToday(day)
 
-                        let textColor: Color = isRed ? .red : (isBlue ? .blue : .primary)
-                        let borderColor: Color = isToday ? .blue : (isRed ? .red : (isBlue ? .blue : Color.gray.opacity(0.3)))
-                        let borderWidth: CGFloat = isToday ? 2 : 1
+                            let textColor: Color = isRed ? .red : (isBlue ? .blue : .primary)
+                            let borderColor: Color = isToday ? .blue : (isRed ? .red : (isBlue ? .blue : Color.gray.opacity(0.3)))
+                            let borderWidth: CGFloat = isToday ? 2 : 1
 
-                        VStack(spacing: 4) {
-                            // Day header
-                            Text(weekdayShort(for: day))
-                                .font(.caption.weight(.medium))
-                                .foregroundStyle(.secondary)
-                            Text(dayNumber(for: day))
-                                .font(.title3.weight(.semibold))
-                            
-                            // Blank framed row to align with left blank row (supports drag selection and merged block)
-                            let topRowDayIndex = calendar.component(.day, from: day)
-                            let isInDraggingRange: Bool = {
-                                if let s = dragStartDayIndex, let c = dragCurrentDayIndex, dragSelecting {
-                                    let lower = min(s, c)
-                                    let upper = max(s, c)
-                                    return (lower...upper).contains(topRowDayIndex)
-                                }
-                                return false
-                            }()
-                            let activeMerged = mergedRange(containing: topRowDayIndex)
-                            let isMerged = activeMerged != nil
-                            let isMergedStart = isMerged && isStart(of: activeMerged!, at: topRowDayIndex)
+                            VStack(spacing: 4) {
+                                Text(weekdayShort(for: day))
+                                    .font(.caption.weight(.medium))
+                                    .foregroundStyle(.secondary)
+                                Text(dayNumber(for: day))
+                                    .font(.title3.weight(.semibold))
 
-                            ZStack {
-                                if let range = activeMerged, isMergedStart {
-                                    // Render a merged block starting at this day, spanning the whole range width via overlay
-                                    let span = range.count // number of days in range
-                                    let cellWidth: CGFloat = 60
-                                    let blockWidth = CGFloat(span) * cellWidth
-                                    RoundedRectangle(cornerRadius: 6)
-                                        .fill(Color.gray.opacity(0.2))
-                                        .overlay(
-                                            RoundedRectangle(cornerRadius: 6)
-                                                .stroke(Color.gray.opacity(0.3), lineWidth: 1)
-                                        )
-                                        .frame(width: blockWidth, height: 28, alignment: .leading)
-                                        .alignmentGuide(.leading) { d in d[.leading] }
-                                        .onTapGesture {
-                                            editingRange = range
-                                        }
-                                        .overlay(
-                                            Text(mergedTexts[range] ?? "")
-                                                .font(.footnote.weight(.semibold))
-                                                .lineLimit(1)
-                                                .minimumScaleFactor(0.6)
-                                                .padding(.horizontal, 4)
-                                                .frame(width: blockWidth - 8, alignment: .center)
-                                        , alignment: .center)
-                                } else {
-                                    // Regular single cell background (drag feedback or idle)
-                                    let bg = isInDraggingRange ? Color.indigo.opacity(0.25) : (isMerged ? Color.clear : Color.clear)
-                                    RoundedRectangle(cornerRadius: 6)
-                                        .fill(bg)
-                                        .overlay(
-                                            RoundedRectangle(cornerRadius: 6)
-                                                .stroke(Color.gray.opacity(0.3), lineWidth: 1)
-                                        )
-                                        .frame(width: 60, height: 28)
-                                }
-                            }
-                            .frame(width: 60, height: 28)
-                            .contentShape(Rectangle())
-                            .gesture(
-                                DragGesture(minimumDistance: 0)
-                                    .onChanged { _ in
-                                        if isMerged { return }
-                                        if dragStartDayIndex == nil {
-                                            dragStartDayIndex = topRowDayIndex
-                                        }
-                                        dragCurrentDayIndex = topRowDayIndex
-                                        dragSelecting = true
+                                let topRowDayIndex = calendar.component(.day, from: day)
+                                let isInDraggingRange: Bool = {
+                                    if let s = dragStartDayIndex, let c = dragCurrentDayIndex, dragSelecting {
+                                        let lower = min(s, c)
+                                        let upper = max(s, c)
+                                        return (lower...upper).contains(topRowDayIndex)
                                     }
-                                    .onEnded { _ in
-                                        if isMerged { return }
-                                        dragSelecting = false
-                                        if let s = dragStartDayIndex, let c = dragCurrentDayIndex {
-                                            let lower = min(s, c)
-                                            let upper = max(s, c)
-                                            mergedRanges.append(lower...upper)
-                                        }
-                                        dragStartDayIndex = nil
-                                        dragCurrentDayIndex = nil
-                                    }
-                            )
-
-                            // Interactive rows aligned with left labels (only initials rows + Var/Yok)
-                            ForEach(0..<(initials.count + 2), id: \.self) { r in
-                                let key = cellKey(date: day, rowIndex: r)
-
-                                // Compute counts once per column
-                                let filledCount: Int = {
-                                    var c = 0
-                                    for i in 0..<initials.count {
-                                        let k = cellKey(date: day, rowIndex: i)
-                                        if let v = cellSelections[k], !v.isEmpty { c += 1 }
-                                    }
-                                    return c
+                                    return false
                                 }()
-                                let emptyCount = max(0, initials.count - filledCount)
-                                let yokCount = filledCount
-                                let varCount = emptyCount
+                                let activeMerged = mergedRange(containing: topRowDayIndex)
+                                let isMerged = activeMerged != nil
+                                let isMergedStart = isMerged && isStart(of: activeMerged!, at: topRowDayIndex)
 
-                                if r < initials.count {
-                                    Button {
-                                        presentingCellKey = key
-                                    } label: {
+                                ZStack {
+                                    if let range = activeMerged, isMergedStart {
+                                        let span = range.count
+                                        let cellWidth: CGFloat = 60
+                                        let blockWidth = CGFloat(span) * cellWidth
+                                        RoundedRectangle(cornerRadius: 6)
+                                            .fill(Color.gray.opacity(0.2))
+                                            .overlay(
+                                                RoundedRectangle(cornerRadius: 6)
+                                                    .stroke(Color.gray.opacity(0.3), lineWidth: 1)
+                                            )
+                                            .frame(width: blockWidth, height: 28, alignment: .leading)
+                                            .alignmentGuide(.leading) { d in d[.leading] }
+                                            .onTapGesture { editingRange = range }
+                                            .overlay(
+                                                Text(mergedTexts[range] ?? "")
+                                                    .font(.footnote.weight(.semibold))
+                                                    .lineLimit(1)
+                                                    .minimumScaleFactor(0.6)
+                                                    .padding(.horizontal, 4)
+                                                    .frame(width: blockWidth - 8, alignment: .center)
+                                            , alignment: .center)
+                                    } else {
+                                        let bg = isInDraggingRange ? Color.indigo.opacity(0.25) : (isMerged ? Color.clear : Color.clear)
+                                        RoundedRectangle(cornerRadius: 6)
+                                            .fill(bg)
+                                            .overlay(
+                                                RoundedRectangle(cornerRadius: 6)
+                                                    .stroke(Color.gray.opacity(0.3), lineWidth: 1)
+                                            )
+                                            .frame(width: 60, height: 28)
+                                    }
+                                }
+                                .frame(width: 60, height: 28)
+                                .contentShape(Rectangle())
+                                .gesture(
+                                    DragGesture(minimumDistance: 0)
+                                        .onChanged { _ in
+                                            if isMerged { return }
+                                            if dragStartDayIndex == nil { dragStartDayIndex = topRowDayIndex }
+                                            dragCurrentDayIndex = topRowDayIndex
+                                            dragSelecting = true
+                                        }
+                                        .onEnded { _ in
+                                            if isMerged { return }
+                                            dragSelecting = false
+                                            if let s = dragStartDayIndex, let c = dragCurrentDayIndex {
+                                                let lower = min(s, c)
+                                                let upper = max(s, c)
+                                                mergedRanges.append(lower...upper)
+                                            }
+                                            dragStartDayIndex = nil
+                                            dragCurrentDayIndex = nil
+                                        }
+                                )
+
+                                ForEach(0..<(initials.count + 2), id: \.self) { r in
+                                    let key = cellKey(date: day, rowIndex: r)
+
+                                    let filledCount: Int = {
+                                        var c = 0
+                                        for i in 0..<initials.count {
+                                            let k = cellKey(date: day, rowIndex: i)
+                                            if let v = cellSelections[k], !v.isEmpty { c += 1 }
+                                        }
+                                        return c
+                                    }()
+                                    let emptyCount = max(0, initials.count - filledCount)
+                                    let yokCount = filledCount
+                                    let varCount = emptyCount
+
+                                    if r < initials.count {
+                                        Button {
+                                            presentingCellKey = key
+                                        } label: {
+                                            ZStack {
+                                                RoundedRectangle(cornerRadius: 6)
+                                                    .stroke(Color.gray.opacity(0.3), lineWidth: 1)
+                                                    .background(RoundedRectangle(cornerRadius: 6).fill(Color.clear))
+                                                let full = cellSelections[key] ?? ""
+                                                let abbrev = optionAbbreviations[full] ?? ""
+                                                let color = optionColors[full] ?? .primary
+                                                Text(abbrev)
+                                                    .font(.caption.weight(.semibold))
+                                                    .foregroundStyle(color)
+                                                    .lineLimit(1)
+                                                    .minimumScaleFactor(0.6)
+                                                    .padding(.horizontal, 2)
+                                            }
+                                        }
+                                        .buttonStyle(.plain)
+                                        .frame(width: 60, height: 28)
+                                        // Double-tap to reset this cell to default (empty)
+                                        .simultaneousGesture(TapGesture(count: 2).onEnded {
+                                            cellSelections[key] = ""
+                                            lastChangedKey = key
+                                        })
+                                    } else if r == initials.count {
+                                        let varTone: Color = {
+                                            switch varCount {
+                                            case 1: return .yellow
+                                            case 2: return .orange
+                                            case 3: return .orange.opacity(0.8)
+                                            case 4: return .red.opacity(0.8)
+                                            case 5: return .red
+                                            default: return .clear
+                                            }
+                                        }()
                                         ZStack {
                                             RoundedRectangle(cornerRadius: 6)
-                                                .stroke(Color.gray.opacity(0.3), lineWidth: 1)
-                                                .background(RoundedRectangle(cornerRadius: 6).fill(Color.clear))
-                                            let full = cellSelections[key] ?? ""
-                                            let abbrev = optionAbbreviations[full] ?? ""
-                                            let color = optionColors[full] ?? .primary
-                                            Text(abbrev)
-                                                .font(.caption.weight(.semibold))
-                                                .foregroundStyle(color)
-                                                .lineLimit(1)
-                                                .minimumScaleFactor(0.6)
-                                                .padding(.horizontal, 2)
+                                                .fill(varTone == .clear ? Color.clear : varTone.opacity(0.25))
+                                                .overlay(
+                                                    RoundedRectangle(cornerRadius: 6)
+                                                        .stroke(Color.gray.opacity(0.3), lineWidth: 1)
+                                                )
+                                            Text("\(varCount)")
+                                                .font(.headline.weight(.bold))
+                                                .foregroundStyle((1...5).contains(varCount) ? Color.white : Color.black)
                                         }
-                                    }
-                                    .buttonStyle(.plain)
-                                    .frame(width: 60, height: 28)
-                                } else if r == initials.count {
-                                    // Var count row with 1-5 red-toned background
-                                    let varTone: Color = {
-                                        switch varCount {
-                                        case 1: return .yellow
-                                        case 2: return .orange
-                                        case 3: return .orange.opacity(0.8)
-                                        case 4: return .red.opacity(0.8)
-                                        case 5: return .red
-                                        default: return .clear
+                                        .frame(width: 60, height: 28)
+                                    } else {
+                                        let yokTone: Color = {
+                                            switch yokCount {
+                                            case 1: return .yellow
+                                            case 2: return .orange
+                                            case 3: return .orange.opacity(0.8)
+                                            case 4: return .red.opacity(0.8)
+                                            case 5: return .red
+                                            default: return .clear
+                                            }
+                                        }()
+                                        ZStack {
+                                            RoundedRectangle(cornerRadius: 6)
+                                                .fill(yokTone == .clear ? Color.clear : yokTone.opacity(0.25))
+                                                .overlay(
+                                                    RoundedRectangle(cornerRadius: 6)
+                                                        .stroke(Color.gray.opacity(0.3), lineWidth: 1)
+                                                )
+                                            Text("\(yokCount)")
+                                                .font(.headline.weight(.bold))
+                                                .foregroundStyle((1...5).contains(yokCount) ? Color.white : Color.black)
                                         }
-                                    }()
-                                    ZStack {
-                                        RoundedRectangle(cornerRadius: 6)
-                                            .fill(varTone == .clear ? Color.clear : varTone.opacity(0.25))
-                                            .overlay(
-                                                RoundedRectangle(cornerRadius: 6)
-                                                    .stroke(Color.gray.opacity(0.3), lineWidth: 1)
-                                            )
-                                        Text("\(varCount)")
-                                            .font(.headline.weight(.bold))
-                                            .foregroundStyle((1...5).contains(varCount) ? Color.white : Color.black)
+                                        .frame(width: 60, height: 28)
                                     }
-                                    .frame(width: 60, height: 28)
-                                } else {
-                                    // Yok count row with 1-5 red-toned background
-                                    let yokTone: Color = {
-                                        switch yokCount {
-                                        case 1: return .yellow
-                                        case 2: return .orange
-                                        case 3: return .orange.opacity(0.8)
-                                        case 4: return .red.opacity(0.8)
-                                        case 5: return .red
-                                        default: return .clear
-                                        }
-                                    }()
-                                    ZStack {
-                                        RoundedRectangle(cornerRadius: 6)
-                                            .fill(yokTone == .clear ? Color.clear : yokTone.opacity(0.25))
-                                            .overlay(
-                                                RoundedRectangle(cornerRadius: 6)
-                                                    .stroke(Color.gray.opacity(0.3), lineWidth: 1)
-                                            )
-                                        Text("\(yokCount)")
-                                            .font(.headline.weight(.bold))
-                                            .foregroundStyle((1...5).contains(yokCount) ? Color.white : Color.black)
-                                    }
-                                    .frame(width: 60, height: 28)
                                 }
                             }
+                            .padding(.vertical, 8)
+                            .padding(.horizontal, 10)
+                            .background(
+                                RoundedRectangle(cornerRadius: 10)
+                                    .fill(isToday ? Color.yellow.opacity(0.25) : Color.clear)
+                            )
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 10)
+                                    .stroke(borderColor, lineWidth: borderWidth)
+                            )
+                            .foregroundStyle(textColor)
                         }
-                        .padding(.vertical, 8)
-                        .padding(.horizontal, 10)
-                        .background(
-                            RoundedRectangle(cornerRadius: 10)
-                                .fill(isToday ? Color.yellow.opacity(0.25) : Color.clear)
-                        )
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 10)
-                                .stroke(borderColor, lineWidth: borderWidth)
-                        )
-                        .foregroundStyle(textColor)
                     }
+                    .padding(.horizontal)
                 }
-                .padding(.horizontal)
             }
+            
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 8) {
                     
@@ -519,12 +527,25 @@ struct TakvimGestureView: View {
         }
         .padding()
         .onChange(of: selectedDate) { _, newDate in
+            #if DEBUG
+            print("[Takvim] selectedDate changed to \(newDate)")
+            #endif
             loadSelections(for: newDate)
         }
         .onChange(of: cellSelections) { _, _ in
-            saveSelections(for: selectedDate)
+            #if DEBUG
+            print("[Takvim] cellSelections changed. lastChangedKey=\(lastChangedKey ?? "nil")")
+            #endif
+            if let key = lastChangedKey, let datePart = key.split(separator: "-").first, let date = dateFromDateKey(String(datePart)) {
+                saveSelections(for: date)
+            } else {
+                saveSelections(for: selectedDate)
+            }
         }
         .onAppear {
+            #if DEBUG
+            print("[Takvim] onAppear. Loading local and iCloud month data")
+            #endif
             loadSelections(for: selectedDate)
         }
     }

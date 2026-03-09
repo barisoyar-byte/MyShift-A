@@ -7,6 +7,10 @@
 
 import SwiftUI
 import SwiftData
+import Foundation
+import Combine
+
+@MainActor
 
 // Shared storage keys for initials saved by EkipView
 private let ekipInitialsKeyPrimary = "ekip_initials_csv"
@@ -100,6 +104,8 @@ struct PlanlamaView: View {
 
     @State private var selections: [[String]] = Array(repeating: Array(repeating: "", count: 7), count: 10)
     @State private var monthMatrix: [[String]] = []
+    @State private var showDefaultDayAlert: Bool = false
+    @State private var defaultDayMessage: String = ""
     
     private var initials: [String] {
         let csv: String
@@ -395,7 +401,7 @@ struct PlanlamaView: View {
         private var borderWidth: CGFloat { isToday ? 2 : 1 }
 
         private var backgroundFill: Color {
-            isSelected ? Color.accentColor.opacity(0.25) : (isToday ? Color.yellow.opacity(0.25) : Color.clear)
+            isSelected ? Color.green.opacity(0.25) : (isToday ? Color.yellow.opacity(0.25) : Color.clear)
         }
 
         private func weekdayShort() -> String {
@@ -712,7 +718,6 @@ struct PlanlamaView: View {
             if let nearest = nearestSelectableDay(in: selectedDate, from: today) {
                 selectedDay = nearest
                 
-                // Load saved selections for the selected day or reset
                 if let d = selectedDay {
                     if let loaded = loadDaySelections(for: d) {
                         selections = loaded
@@ -744,6 +749,11 @@ struct PlanlamaView: View {
                 saveDaySelections(for: d)
             }
         }
+        .alert("Bilgi", isPresented: $showDefaultDayAlert, actions: {
+            Button("Tamam", role: .cancel) { showDefaultDayAlert = false }
+        }, message: {
+            Text(defaultDayMessage)
+        })
         .padding()
     }
 }

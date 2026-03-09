@@ -10,6 +10,10 @@
 
 import SwiftUI
 import SwiftData
+import Foundation
+import Combine
+
+@MainActor
 
 // Shared storage keys for initials saved by EkipView
 private let ekipInitialsKeyPrimary = "ekip_initials_csv"

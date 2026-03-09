@@ -7,6 +7,11 @@
 
 import SwiftUI
 import SwiftData
+import Foundation
+import Combine
+
+@MainActor
+
 struct FormlarGestureView: View {
     var body: some View {
         Text("Tapped!")
