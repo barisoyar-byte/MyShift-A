@@ -7,6 +7,50 @@ import Combine
 import UIKit
 #endif
 
+// MARK: - Helper: Parse ekip.json from Bundle
+func loadEkipFromBundleJSON() -> [(name: String, initial: String)] {
+    guard let jsonURL = Bundle.main.url(forResource: "ekip", withExtension: "json") else {
+        print("ekip.json bulunamadı")
+        return []
+    }
+    
+    do {
+        let data = try Data(contentsOf: jsonURL)
+        let decoder = JSONDecoder()
+        let ekipArray = try decoder.decode([EkipEntry].self, from: data)
+        return ekipArray.map { ($0.name, $0.initial) }
+    } catch {
+        print("ekip.json parse hatası: \(error)")
+        return []
+    }
+}
+
+// MARK: - Helper: Codable model for ekip.json
+struct EkipEntry: Codable {
+    let initial: String
+    let name: String
+}
+
+// MARK: - Helper: Initialize UserDefaults from bundle JSON on first launch
+func initializeEkipFromBundleIfNeeded() {
+    let defaults = UserDefaults.standard
+    let hasInitializedKey = "ekip_initialized_from_bundle"
+    
+    // Only initialize once
+    if !defaults.bool(forKey: hasInitializedKey) {
+        let entries = loadEkipFromBundleJSON()
+        if !entries.isEmpty {
+            let csv = entries
+                .map { $0.1.trimmingCharacters(in: .whitespacesAndNewlines).uppercased() }
+                .filter { !$0.isEmpty }
+                .joined(separator: ",")
+            defaults.set(csv, forKey: "userInitials")
+            defaults.set(true, forKey: hasInitializedKey)
+            print("ekip.json UserDefaults'a yüklendi: \(entries.count) üye")
+        }
+    }
+}
+
 @MainActor
 struct EkipView: View {
     // Data source for the list
@@ -252,4 +296,3 @@ struct EkipEntryView: View {
 #Preview {
     NavigationStack { EkipView() }
 }
-
