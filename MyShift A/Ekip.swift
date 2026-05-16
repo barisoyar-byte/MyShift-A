@@ -41,7 +41,7 @@ func initializeEkipFromBundleIfNeeded() {
         let entries = loadEkipFromBundleJSON()
         if !entries.isEmpty {
             let csv = entries
-                .map { $0.1.trimmingCharacters(in: .whitespacesAndNewlines).uppercased() }
+                .map { $0.initial.trimmingCharacters(in: .whitespacesAndNewlines).uppercased() }
                 .filter { !$0.isEmpty }
                 .joined(separator: ",")
             defaults.set(csv, forKey: "userInitials")
